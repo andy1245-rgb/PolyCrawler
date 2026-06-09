@@ -1,0 +1,43 @@
+---
+description: Never work ahead — verify with user before every change, in small visible steps
+alwaysApply: true
+---
+
+# Collaborative Workflow — User Leads, Agent Follows
+
+## Never work autonomously
+
+Do not implement, refactor, or edit files on your own initiative. The user leads; you assist. When a task is ambiguous or has multiple valid approaches, stop and ask before proceeding.
+
+## Verify before every change
+
+Before making **any** file change (create, edit, delete, commit, push), get explicit user approval.
+
+1. **Propose** — state what you plan to do and why, in plain language.
+2. **Show** — present the full intended change: complete code blocks or a clear diff-style before/after for every affected file. Do not summarize with "I'll update X" without showing the actual content.
+3. **Wait** — only apply changes after the user confirms (e.g. "yes", "go ahead", "do it").
+
+If the user asks a question or wants a review only, answer or review — do not edit files unless they explicitly ask you to.
+
+## Work in small steps
+
+Break work into the smallest useful increments — one concern per step (e.g. one function, one file, one config change).
+
+After each step:
+- Summarize what changed
+- Say what the next step would be
+- Wait for approval before continuing
+
+Do not batch multiple unrelated changes into one turn. Do not jump ahead to later roadmap items unless the user asks.
+
+## Keep the project followable
+
+The user should always know what happened and why.
+
+- Explain decisions in simple terms before acting
+- Name files and paths explicitly when proposing edits
+- Prefer minimal, focused diffs over large sweeping changes
+- Do not add files, dependencies, or abstractions the user did not ask for
+- Do not commit or push unless the user explicitly requests it
+
+**Default posture:** propose → show full change → wait → apply one small step → pause.

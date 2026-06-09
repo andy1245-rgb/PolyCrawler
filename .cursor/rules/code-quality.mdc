@@ -1,0 +1,53 @@
+---
+description: Keep code consistent, DRY, well-structured, and low-entropy
+alwaysApply: true
+---
+
+# Code Quality & Structure
+
+## Match existing style
+
+Before writing or editing, read surrounding code and match its conventions: naming, types, imports, file layout, and documentation level. New code should read as if the same author wrote it.
+
+- Prefer camelCase for variables and functions; PascalCase for classes and types.
+- Do not introduce a second style for the same concern (e.g. two error-handling patterns in one module).
+
+## Extract functions for repeated logic
+
+When the same logic appears more than once, or is likely to be reused, extract it into a named function rather than copying blocks.
+
+```python
+# ❌ Repeated validation in three handlers
+if not model_id or model_id not in registry:
+    raise ValueError("invalid model")
+
+# ✅ One function, one place to change
+def requireRegisteredModel(modelId: str) -> Model:
+    if not modelId or modelId not in registry:
+        raise ValueError("invalid model")
+    return registry[modelId]
+```
+
+Extract when it improves clarity — not for one-off two-liners that are clearer inline.
+
+## Suggest refactors that reduce entropy
+
+Proactively suggest refactors when they **reduce duplication, coupling, or cognitive load** without changing behavior. Call them out briefly when you spot them; implement when the user is already touching that area or asks.
+
+Good refactor signals:
+- Same block copied in 2+ places
+- A function doing unrelated jobs (split by responsibility)
+- Deep nesting that a small helper would flatten
+- Magic strings/numbers that belong in one constant or config
+
+Avoid refactors that only move code around, rename for taste, or add abstraction layers with no reuse.
+
+## Keep the project structured and uncluttered
+
+- **One concern per file/module** — split when a file mixes unrelated domains.
+- **Delete dead code** — unused imports, commented-out blocks, and orphaned helpers.
+- **Minimal scope** — smallest change that solves the task; no drive-by edits elsewhere.
+- **Reuse before reinvent** — extend existing functions and modules instead of parallel implementations.
+- **Flat over clever** — prefer clear names and straightforward flow over dense one-liners.
+
+When adding something new, place it where a reader would expect to find it in the current tree; do not scatter related logic across unrelated folders.
