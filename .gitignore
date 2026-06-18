@@ -30,6 +30,10 @@ build/
 .coverage
 htmlcov/
 
+# Local notes / tooling
+.commandcode/
+selfNotes.md
+
 # Local data
 *.db
 *.sqlite3
