@@ -15,6 +15,9 @@ env/
 .vscode/
 *.swp
 
+# Cursor
+.cursor/
+
 # OS
 .DS_Store
 Thumbs.db
