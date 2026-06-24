@@ -1,0 +1,73 @@
+# PolyCrawler default configuration.
+# Override via environment variables (POLY_*_*) or a production.yaml file.
+
+discovery:
+  min_sibling_count: 2
+  min_cluster_score: null
+  funding_hops: 3
+  profit_formula: sqrt
+  subtract_losses: false
+  weights:
+    profit: 2.0
+    efficiency: 15.0
+    win_rate: 5.0
+  efficiency_cap: 10.0
+  min_exit_count_for_win_rate: 1
+
+entry:
+  min_buy_usd: 500.0
+  market_tags: []
+  max_odds_enabled: true
+  max_odds: 0.5
+  mirror_pct: 1.0
+  mirror_cap_usd: null
+  post_entry_poll_interval_sec: 10
+  post_entry_poll_count: 6
+  hedge_filter_mode: net_only
+  ignore_hedge_trades: true
+  hedge_dominant_threshold: 2.0
+  follow_reentry_after_sell: true
+  reentry_window_minutes: 5
+
+exit:
+  poll_interval_sec: 60
+  take_profit_enabled: false
+  take_profit_pct: 0.50
+  stop_loss_enabled: false
+  stop_loss_pct: 0.25
+  max_hold_hours: null
+  close_on_resolution: true
+
+review:
+  mode: live_only
+
+execution:
+  mode: paper
+
+paper:
+  fill_model: orderbook_walk_next_poll
+  pessimistic_slippage_pct: 0.0
+
+conflict:
+  policy: net_cluster_position
+  min_net_usd: 100.0
+  dust_shares: 0.001
+  always_alert: true
+
+position:
+  signal_expire_minutes: null
+  market_watch_expire_days: null
+
+watch:
+  account_expire_days: null
+
+alerts:
+  channels:
+    - dashboard
+
+retention:
+  raw_trades_days: 90
+  analytics_indefinite: true
+
+sessions:
+  private_default: false
