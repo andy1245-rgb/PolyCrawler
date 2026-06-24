@@ -263,17 +263,6 @@ An account **FUND** does **not** create a position state — it adds a sibling t
 IN_POSITION` | Actively mirroring cluster net (§7.7). |
 | `CLOSED` | **Bookkeeping only — not a resting state.** We exited our mirror this cycle (hedge, TP, SL, redeem, etc.). The processor logs `exitReason`, PnL, and `last_closed_at`, then **immediately** sets state back to `WATCHING` on the **same poll tick**. You never “sit” in `CLOSED`; it exists so every exit is a recorded event before the row returns to idle. |
 | `WATCHING` | No mirrored position in this market. Cluster net ~0 **or** we closed and reset. May carry `tp_sl_mirror_suspended_until_flat` after a TP/SL exit (§6.4). |
-
-
-
-
-
-
-
-
-
-
-
 | `WATCHING` | No mirrored position in this market. Cluster net ~0 **or** we closed and reset. May carry `tp_sl_mirror_suspended_until_flat` after a TP/SL exit (§6.4)
 | `siblingBalances` | Map `accountId → { yesShares, noShares }` |
 | `net_exposure` | Signed shares: sum(Yes) − sum(No) |
