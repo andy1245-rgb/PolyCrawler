@@ -1,0 +1,26 @@
+{
+  "market_id": "0xmarket123456789",
+  "timestamp": "2026-06-01T13:00:00Z",
+  "yes": {
+    "bids": [
+      {"price": 0.48, "shares": 5000},
+      {"price": 0.47, "shares": 3000},
+      {"price": 0.46, "shares": 2000}
+    ],
+    "asks": [
+      {"price": 0.50, "shares": 4000},
+      {"price": 0.51, "shares": 2500},
+      {"price": 0.52, "shares": 1000}
+    ]
+  },
+  "no": {
+    "bids": [
+      {"price": 0.52, "shares": 3000},
+      {"price": 0.51, "shares": 2000}
+    ],
+    "asks": [
+      {"price": 0.54, "shares": 3500},
+      {"price": 0.55, "shares": 1500}
+    ]
+  }
+}
