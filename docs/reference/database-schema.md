@@ -4,7 +4,7 @@
 
 ---
 
-12 tables defined in `src/poly_crawler/db/models/`.
+11 tables defined in `src/poly_crawler/db/models/`.
 
 ## Tables
 

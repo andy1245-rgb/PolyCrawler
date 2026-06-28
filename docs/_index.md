@@ -55,6 +55,7 @@ Documentation is organized by domain, mirroring the structure of `spec.md` (§ s
 ## [Architecture](architecture/)
 | File | Covers | Source |
 |------|--------|--------|
+| [architecture.md](architecture.md) | Full technical architecture — design decisions, schema, interfaces, FSM, build order | arch (all) |
 | [project-structure.md](architecture/project-structure.md) | Directory tree, module responsibilities | arch §1 |
 | [component-interfaces.md](architecture/component-interfaces.md) | IngestionAdapter, ExecutionAdapter, Engine | arch §4 |
 | [document-history.md](architecture/document-history.md) | Spec version changelog | spec §21 |

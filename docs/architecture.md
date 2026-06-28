@@ -136,6 +136,7 @@ accounts ──1:N── sibling_balance_snapshots
 cluster_positions ──1:N── paper_trades
 sessions ──1:N── paper_trades
 sessions ──1:N── backtest_runs
+config_snapshots ──1:N── cluster_positions (via config_snapshot_id)
 ```
 
 ### 2.2 Table definitions
@@ -270,7 +271,7 @@ Indexes: `(account_id)`, `(cluster_id, market_id)`
 | Column | Type | Constraints | Notes |
 |--------|------|-------------|-------|
 | id | UUID | PK | |
-| name | VARCHAR(255) | nullable | |
+| name | TEXT | nullable | |
 | mode | VARCHAR(10) | NOT NULL, CHECK IN | observe, paper, live |
 | review_mode | VARCHAR(10) | NOT NULL, CHECK IN | all, live_only, none |
 | config_snapshot | JSONB | NOT NULL | Immutable config copy |
@@ -726,11 +727,13 @@ Frontend: TBD (API-first in v0.1, frontend in a later design pass).
 | `test_engine_cycle.py` | Full cycle: events → FSM → trades, DB persistence |
 | `test_paper_execution.py` | Orderbook walk with mock CLOB data, fill accuracy |
 
-### 11.3 Test fixtures
+### 11.3 Test fixtures (planned)
 
-- `labeled_wallets.json`: ~20 wallets with known profit/efficiency/winrate
-- `sample_events.json`: Pre-built FUND/BIRTH/TRADE events
-- `sample_orderbook.json`: CLOB order books at various depths
+The following fixture files are planned for Phases 1–3 (created alongside their dependent tests). Currently only `tests/fixtures/__init__.py` exists as a package marker.
+
+- `labeled_wallets.json` (Phase 1+): ~20 wallets with known profit/efficiency/winrate
+- `sample_events.json` (Phase 1+): Pre-built FUND/BIRTH/TRADE events
+- `sample_orderbook.json` (Phase 3+): CLOB order books at various depths
 
 ---
 
