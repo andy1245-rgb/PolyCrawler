@@ -275,14 +275,13 @@ to:
 | 2 | `config/production.yaml` | 18 | Config |
 | 3 | `alembic/versions/0001_initial.py` | 191 | Migration |
 | 4 | `tests/conftest.py` | 69 | Test infra |
-| 5 | `tests/fixtures/__init__.py` | 1 | Package |
-| 6 | `tests/fixtures/labeled_wallets.json` | 20 | Test data |
-| 7 | `tests/fixtures/sample_events.json` | 37 | Test data |
-| 8 | `tests/fixtures/sample_orderbook.json` | 28 | Test data |
-| 9 | `Makefile` | 29 | Build |
-| 10 | `scripts/dev.ps1` | 31 | Build |
-| 11 | `scripts/validate_schema.py` | 23 | Build |
-| 12 | `README.md` | 22 (1 changed) | Docs |
+| 5 | `tests/fixtures/__init__.py` | 1 | Test data (package marker) |
+| 6 | `Makefile` | 29 | Build |
+| 7 | `scripts/dev.ps1` | 31 | Build |
+| 8 | `scripts/validate_schema.py` | 23 | Build |
+| 9 | `README.md` | 22 (1 changed) | Docs |
+
+> **Note:** `tests/fixtures/labeled_wallets.json`, `sample_events.json`, and `sample_orderbook.json` are **planned for Phases 1–3** (see [project-structure.md](../architecture/project-structure.md)). Only the `__init__.py` package marker was created in Phase 0.
 
 ---
 
@@ -296,7 +295,7 @@ to:
 | All 11 DB models | ✅ Complete | `src/poly_crawler/db/models/*.py` |
 | Alembic setup | ✅ Complete | `alembic.ini`, `alembic/env.py`, `alembic/versions/0001_initial.py` |
 | Application entry point | ✅ Complete | `src/poly_crawler/main.py` |
-| Test infrastructure | ✅ Complete | `tests/conftest.py`, `tests/fixtures/` |
+| Test infrastructure | ✅ Complete (conftest + package marker; fixture JSON files planned for Phases 1–3) | `tests/conftest.py`, `tests/fixtures/__init__.py` |
 | Build tooling | ✅ Complete | `Makefile`, `scripts/dev.ps1`, `scripts/validate_schema.py` |
 | Production config | ✅ Complete | `config/production.yaml` |
 | Documentation | ✅ Complete | `docs/reference/phase0-complete.md` |

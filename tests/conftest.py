@@ -69,7 +69,7 @@ def session_kwargs() -> dict:
     return {
         "id": uuid4(),
         "mode": "paper",
-        "review_mode": "manual",
+        "review_mode": "live_only",
         "config_snapshot": {},
         "started_at": datetime.now(timezone.utc),
         "status": "running",

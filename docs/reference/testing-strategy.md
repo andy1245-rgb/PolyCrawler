@@ -34,24 +34,14 @@ async def test_create_parent(session, parent_kwargs):
 
 ### Test fixtures (`tests/fixtures/`)
 
-| File | Format | Purpose |
-|------|--------|---------|
-| `labeled_wallets.json` | JSON | Known parent with 3 sibling accounts, cluster_score 18.3 |
-| `sample_events.json` | JSON array | 3 events: fund ($5k), birth (new account), trade (1k yes @ 0.45) |
-| `sample_orderbook.json` | JSON | Bid/ask levels for Yes and No on a sample market |
-| `__init__.py` | — | Package marker |
+> **Status:** The JSON fixture files below are **planned** for Phases 1–3 (they'll be created alongside the tests that use them). Currently only `__init__.py` exists as a package marker.
 
-Load fixtures in tests:
-
-```python
-import json
-
-def test_load_fixtures():
-    path = Path(__file__).parent.parent / "fixtures" / "sample_events.json"
-    with open(path) as f:
-        events = json.load(f)
-    assert len(events) == 3
-```
+| File | Format | Planned Phase | Purpose |
+|------|--------|---------------|---------|
+| `labeled_wallets.json` | JSON | Phase 1+ | Known parent with 3 sibling accounts, cluster_score 18.3 |
+| `sample_events.json` | JSON array | Phase 1+ | 3 events: fund ($5k), birth (new account), trade (1k yes @ 0.45) |
+| `sample_orderbook.json` | JSON | Phase 3+ | Bid/ask levels for Yes and No on a sample market |
+| `__init__.py` | — | Complete | Package marker |
 
 ## Unit tests
 

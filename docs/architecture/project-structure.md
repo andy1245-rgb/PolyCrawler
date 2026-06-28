@@ -73,14 +73,15 @@ poly-crawler/
     │   └── __init__.py                   # (Phase 1+)
     └── fixtures/
         ├── __init__.py
-        ├── labeled_wallets.json           # Parent→account→cluster test data
-        ├── sample_events.json             # Fund, birth, trade event sequences
-        └── sample_orderbook.json          # CLOB bid/ask levels for paper fill tests
+        ├── labeled_wallets.json           # Parent→account→cluster test data (Phase 1+)
+        ├── sample_events.json             # Fund, birth, trade event sequences (Phase 1+)
+        └── sample_orderbook.json          # CLOB bid/ask levels for paper fill tests (Phase 3+)
 ```
 
 ## Module status key
 
 | Marker | Meaning |
 |--------|---------|
-| No annotation | Fully implemented |
-| `(Phase N)` | Empty stub — implementation planned for Phase N |
+| No annotation | Implemented and present on disk |
+| `(Phase N)` | Not yet implemented — planned for Phase N |
+| `(Phase N+)` | Planned for Phase N or later (depends on earlier phases) |
