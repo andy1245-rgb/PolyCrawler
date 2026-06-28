@@ -1,19 +1,55 @@
 {
-  "parents": [
+  "parent": {
+    "chain_address": "0xParent111111111111111111111111111111111111",
+    "first_seen_at": "2026-01-15T10:30:00Z",
+    "last_seen_at": "2026-06-20T14:00:00Z"
+  },
+  "siblings": [
     {
-      "label": "known_whale_a",
-      "chain_address": "0x1111111111111111111111111111111111111111",
-      "children": [
-        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "0xcccccccccccccccccccccccccccccccccccccccc"
-      ],
-      "cluster_score": 18.3
+      "polymarket_address": "0xSibA1111111111111111111111111111111111111",
+      "account_type": "deposit_wallet",
+      "funded_at": "2026-02-01T08:00:00Z",
+      "total_deposited": 5000.0,
+      "realized_profit": 3200.0,
+      "total_exits": 8,
+      "profitable_exits": 6
+    },
+    {
+      "polymarket_address": "0xSibB2222222222222222222222222222222222222",
+      "account_type": "safe",
+      "funded_at": "2026-03-10T12:00:00Z",
+      "total_deposited": 3000.0,
+      "realized_profit": 1500.0,
+      "total_exits": 5,
+      "profitable_exits": 4
+    },
+    {
+      "polymarket_address": "0xSibC3333333333333333333333333333333333333",
+      "account_type": "deposit_wallet",
+      "funded_at": "2026-04-05T16:00:00Z",
+      "total_deposited": 10000.0,
+      "realized_profit": 4100.0,
+      "total_exits": 12,
+      "profitable_exits": 8
     }
   ],
-  "accounts": [
-    {"address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "type": "deposit_wallet"},
-    {"address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "type": "safe"},
-    {"address": "0xcccccccccccccccccccccccccccccccccccccccc", "type": "deposit_wallet"}
-  ]
+  "cluster_score": 18.3,
+  "score_variant": "sqrt",
+  "score_breakdown": {
+    "sibA": {
+      "profit_score": 8.94,
+      "efficiency_score": 9.6,
+      "win_rate_score": 1.25
+    },
+    "sibB": {
+      "profit_score": 6.12,
+      "efficiency_score": 7.5,
+      "win_rate_score": 1.5
+    },
+    "sibC": {
+      "profit_score": 10.0,
+      "efficiency_score": 6.15,
+      "win_rate_score": 1.25
+    }
+  }
 }

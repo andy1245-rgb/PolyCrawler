@@ -1,26 +1,26 @@
 {
-  "market_id": "0xmarket123456789",
-  "timestamp": "2026-06-01T13:00:00Z",
+  "market_id": "0xmarket1234567890abcdef1234567890abcdef12",
+  "timestamp": "2026-06-01T11:16:00Z",
   "yes": {
-    "bids": [
-      {"price": 0.48, "shares": 5000},
-      {"price": 0.47, "shares": 3000},
-      {"price": 0.46, "shares": 2000}
-    ],
-    "asks": [
-      {"price": 0.50, "shares": 4000},
-      {"price": 0.51, "shares": 2500},
-      {"price": 0.52, "shares": 1000}
+    "bid": 0.43,
+    "ask": 0.47,
+    "levels": [
+      {"price": 0.43, "shares": 1500},
+      {"price": 0.44, "shares": 2500},
+      {"price": 0.45, "shares": 3000},
+      {"price": 0.46, "shares": 2000},
+      {"price": 0.47, "shares": 1000}
     ]
   },
   "no": {
-    "bids": [
-      {"price": 0.52, "shares": 3000},
-      {"price": 0.51, "shares": 2000}
-    ],
-    "asks": [
-      {"price": 0.54, "shares": 3500},
-      {"price": 0.55, "shares": 1500}
+    "bid": 0.53,
+    "ask": 0.57,
+    "levels": [
+      {"price": 0.53, "shares": 1200},
+      {"price": 0.54, "shares": 1800},
+      {"price": 0.55, "shares": 2200},
+      {"price": 0.56, "shares": 1500},
+      {"price": 0.57, "shares": 800}
     ]
   }
 }
