@@ -107,7 +107,20 @@ sessions:
 
 ## Config load chain
 
-1. `config/default.yaml` — baseline
-2. `config/production.yaml` — optional overrides (not committed to git)
-3. Environment variables prefixed with `POLY_` — highest priority
+1. `config/default.yaml` — baseline (committed to git, always loaded)
+2. `config/production.yaml` — optional file-level override template.
+   - **Not loaded automatically.** Apply it at runtime with `POLY_CONFIG=config/production.yaml`.
+   - See [phase0-complete.md §2](./phase0-complete.md#2-production-configuration-overrides) for the override template contents.
+3. File referenced by the `POLY_CONFIG` environment variable (any path, any name)
+4. Environment variables prefixed with `POLY_` — highest priority
    - Nested keys use `__`: e.g. `POLY_ENTRY__MAX_ODDS=0.3`
+
+Usage:
+
+```bash
+# Apply production overrides
+POLY_CONFIG=config/production.yaml uvicorn poly_crawler.main:app
+
+# Environment variables override everything
+POLY_ENTRY__MIN_BUY_USD=1000 POLY_CONFIG=config/production.yaml uvicorn poly_crawler.main:app
+```
