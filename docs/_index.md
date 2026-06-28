@@ -48,6 +48,7 @@ Documentation is organized by domain, mirroring the structure of `spec.md` (§ s
 | [implementation-phases.md](reference/implementation-phases.md) | Build order: 9 phases from bootstrap to live | spec §16, arch §12 |
 | [data-retention.md](reference/data-retention.md) | Trade logs, analytics, RPC log retention | spec §18 |
 | [testing-strategy.md](reference/testing-strategy.md) | Unit + integration test inventory, fixtures | arch §11 |
+| [phase0-complete.md](reference/phase0-complete.md) | Phase 0 bootstrap deliverables — entry point, migration, conftest, Makefile, scripts | §16 / Phase 0 |
 | [open-questions.md](reference/open-questions.md) | Open design questions and resolutions | spec §20 |
 
 ## [Architecture](architecture/)
