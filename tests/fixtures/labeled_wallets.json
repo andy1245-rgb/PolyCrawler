@@ -1,0 +1,19 @@
+{
+  "parents": [
+    {
+      "label": "known_whale_a",
+      "chain_address": "0x1111111111111111111111111111111111111111",
+      "children": [
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "0xcccccccccccccccccccccccccccccccccccccccc"
+      ],
+      "cluster_score": 18.3
+    }
+  ],
+  "accounts": [
+    {"address": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "type": "deposit_wallet"},
+    {"address": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "type": "safe"},
+    {"address": "0xcccccccccccccccccccccccccccccccccccccccc", "type": "deposit_wallet"}
+  ]
+}

@@ -2,7 +2,7 @@
 
 Detection and paper-trading pipeline for Polymarket accounts linked by on-chain funding (parent wallets → sibling accounts → early alerts before wins).
 
-**Status:** v0.1.5 — specification only. Implementation not started.
+**Status:** v0.1.5 — Phase 0 (bootstrap) complete. Config schema, DB models, Alembic migrations, test infrastructure, and app entry point are in place. Moving to Phase 1 (discovery engine).
 
 ## Spec
 

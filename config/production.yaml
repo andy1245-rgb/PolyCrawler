@@ -1,0 +1,24 @@
+# PolyCrawler production overrides.
+#
+# Copy this file to config/production.yaml, fill in real values,
+# and run with POLY_CONFIG=config/production.yaml.
+#
+# Environment variables (POLY_*) always take precedence.
+
+discovery:
+  profit_formula: sqrt
+
+execution:
+  mode: paper  # switch to "live" only after paper validation
+
+alerts:
+  channels:
+    - dashboard
+    # - telegram     # uncomment when Telegram bot token is configured
+    # - discord      # uncomment when Discord webhook URL is configured
+
+retention:
+  raw_trades_days: 365
+
+sessions:
+  private_default: true
