@@ -33,6 +33,7 @@ htmlcov/
 # Local notes / tooling
 .commandcode/
 selfNotes.md
+agents.md
 
 # Local data
 *.db

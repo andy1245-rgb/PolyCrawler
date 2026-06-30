@@ -104,6 +104,7 @@ class Config(BaseSettings):
     )
 
     database_url: Optional[str] = None
+    rpc_url: Optional[str] = None
 
     discovery: DiscoveryConfig = DiscoveryConfig()
     entry: EntryConfig = EntryConfig()

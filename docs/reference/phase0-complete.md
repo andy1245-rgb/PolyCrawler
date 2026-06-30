@@ -272,14 +272,15 @@ to:
 | # | File | Lines | Type |
 |---|------|-------|------|
 | 1 | `src/poly_crawler/main.py` | 28 | Source |
-| 2 | `config/production.yaml` | 18 | Config |
-| 3 | `alembic/versions/0001_initial.py` | 191 | Migration |
-| 4 | `tests/conftest.py` | 69 | Test infra |
-| 5 | `tests/fixtures/__init__.py` | 1 | Test data (package marker) |
-| 6 | `Makefile` | 29 | Build |
-| 7 | `scripts/dev.ps1` | 31 | Build |
-| 8 | `scripts/validate_schema.py` | 23 | Build |
-| 9 | `README.md` | 22 (1 changed) | Docs |
+| 2 | `src/poly_crawler/cli.py` | 43 | Source (pre-flight fix) |
+| 3 | `config/production.yaml` | 18 | Config |
+| 4 | `alembic/versions/0001_initial.py` | 191 | Migration |
+| 5 | `tests/conftest.py` | 69 | Test infra |
+| 6 | `tests/fixtures/__init__.py` | 1 | Test data (package marker) |
+| 7 | `Makefile` | 29 | Build |
+| 8 | `scripts/dev.ps1` | 31 | Build |
+| 9 | `scripts/validate_schema.py` | 23 | Build |
+| 10 | `README.md` | 22 (1 changed) | Docs |
 
 > **Note:** `tests/fixtures/labeled_wallets.json`, `sample_events.json`, and `sample_orderbook.json` were created in Phase 0 alongside the conftest. They'll be expanded (more wallets, more events) as Phases 2–6 are implemented.
 

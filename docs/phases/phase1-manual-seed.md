@@ -19,8 +19,9 @@ Provide a CLI to hand-pick 5–10 parent wallets from research and insert them i
 ## Prerequisites
 
 - Phase 0 complete (DB models, config, engine all working)
-- `[project.scripts]` entry point added to `pyproject.toml` (pre-flight fix from [_index.md](_index.md))
-- `aiosqlite` installed (pre-flight fix — already done)
+- `[project.scripts]` entry point added to `pyproject.toml` (✅ pre-flight fix done — `poly-crawler = "poly_crawler.cli:app"`)
+- `aiosqlite` installed (✅ pre-flight fix done)
+- `typer>=0.12.0` in core dependencies (✅ added)
 - A local Postgres running OR willingness to use the default `localhost:5432`
 
 ## Modules to build

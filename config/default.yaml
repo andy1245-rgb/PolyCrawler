@@ -1,6 +1,9 @@
 # PolyCrawler default configuration.
 # Override via environment variables (POLY_*_*) or a production.yaml file.
 
+database_url: null  # postgresql+asyncpg://... ; defaults to localhost
+rpc_url: null       # Polygon RPC endpoint (Alchemy, QuickNode, etc.)
+
 discovery:
   min_sibling_count: 2
   min_cluster_score: null
