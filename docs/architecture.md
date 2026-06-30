@@ -17,7 +17,6 @@
 
 ## 1. Project structure
 
-> For the current on-disk state with phase annotations, see [project-structure.md](architecture/project-structure.md).
 > The tree below shows the planned end-state structure when all phases are complete.
 
 ```
@@ -139,23 +138,6 @@ poly-crawler/
     ├── architecture.md                   # This document
     └── phases/                           # Phase-by-phase implementation docs
         └── _index.md
-```
-│   │   ├── test_state_machine.py
-│   │   ├── test_entry_rules.py
-│   │   ├── test_exit_rules.py
-│   │   ├── test_net_calculator.py
-│   │   ├── test_hedge_filter.py
-│   │   └── test_reentry.py
-│   ├── integration/
-│   │   ├── test_ingestion_polling.py
-│   │   ├── test_engine_cycle.py
-│   │   └── test_paper_execution.py
-│   └── fixtures/
-│       ├── labeled_wallets.json
-│       ├── sample_events.json
-│       └── sample_orderbook.json
-└── docs/
-    └── architecture.md                   # This document
 ```
 
 ---
