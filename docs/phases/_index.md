@@ -130,7 +130,7 @@ These issues exist in the Phase 0 codebase and should be fixed before or during 
 
 | Issue | Fix | File |
 |-------|-----|------|
-| `aiosqlite` not declared as a dependency | Add to `[project.optional-dependencies] dev` | `pyproject.toml` |
-| No CLI entry point defined | Add `[project.scripts]` for seed/run commands | `pyproject.toml` |
-| Missing config keys from spec §14 | Add `max_slippage_pct`, `add_on_repeat_buy`, `notify_on_repeat_buy`, `tp_sl_suspend_mirror_until_flat` to `ExitConfig` | `src/poly_crawler/config/schema.py`, `config/default.yaml` |
-| RPC provider URL not configured | Add `database_url` / `rpc_url` to config or env | `config/schema.py` or `.env` |
+| `aiosqlite` not declared as a dependency | ✅ Done — added to `[project.optional-dependencies] dev` | `pyproject.toml` |
+| No CLI entry point defined | ✅ Done — `poly-crawler = "poly_crawler.cli:app"` in `[project.scripts]` | `pyproject.toml` |
+| Missing config keys from spec §14 | ✅ Done — `max_slippage_pct`, `add_on_repeat_buy`, `notify_on_repeat_buy`, `tp_sl_suspend_mirror_until_flat` added to `ExitConfig` | `src/poly_crawler/config/schema.py`, `config/default.yaml` |
+| No RPC provider config | ✅ Done — `rpc_url` added to config schema and YAML files | `config/schema.py`, `config/default.yaml`, `config/production.yaml` |

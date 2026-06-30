@@ -70,6 +70,37 @@ $env:MSG = "add market_slug"
 
 ---
 
+## CLI entry point
+
+**File:** `src/poly_crawler/cli.py`
+
+Typer-based CLI providing `seed` and `run` commands.
+
+### Commands
+
+```bash
+# Seed a parent wallet (Phase 1)
+poly-crawler seed --parent 0xABC...
+
+# Bulk seed from file
+poly-crawler seed --from-file parents.txt
+
+# List seeded parents
+poly-crawler seed --list
+
+# Ignore a parent
+poly-crawler seed --ignore 0xABC...
+
+# Start the dev server
+poly-crawler run
+```
+
+Equivalently:
+
+```bash
+python -m poly_crawler.cli seed --list
+```
+
 ## Schema validation script
 
 **File:** `scripts/validate_schema.py`
