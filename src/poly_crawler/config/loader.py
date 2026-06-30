@@ -1,13 +1,14 @@
 """Config loader: YAML defaults → env vars → user override → validated Pydantic model."""
 
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 from .schema import Config
 
 
-def _load_yaml(path: Path) -> dict:
+def _load_yaml(path: Path) -> dict[str, Any]:
     if path.exists():
         with open(path) as f:
             return yaml.safe_load(f) or {}
@@ -24,7 +25,7 @@ def load_config(
     """
     defaults = _load_yaml(Path(default_path))
 
-    overrides = {}
+    overrides: dict[str, Any] = {}
     if override_path:
         overrides = _load_yaml(Path(override_path))
 

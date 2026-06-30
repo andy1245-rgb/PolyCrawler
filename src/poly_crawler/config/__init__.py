@@ -1,5 +1,5 @@
-from .schema import Config, DiscoveryConfig, EntryConfig, ExitConfig
 from .loader import load_config
+from .schema import Config, DiscoveryConfig, EntryConfig, ExitConfig
 
 __all__ = [
     "Config",

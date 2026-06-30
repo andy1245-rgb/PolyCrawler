@@ -6,6 +6,12 @@
 
 Full configuration schema with defaults. All keys can be overridden via environment variables with the `POLY_` prefix and `__` delimiter for nested keys.
 
+## Top-level
+
+```yaml
+database_url: null  # postgresql+asyncpg://... ; falls back to DATABASE_URL env, then localhost default
+```
+
 ## Discovery
 
 ```yaml
@@ -53,6 +59,11 @@ exit:
   stop_loss_pct: 0.25
   max_hold_hours: null
   close_on_resolution: true
+  add_on_repeat_buy: false           # add to position on repeat buy (net unchanged)
+  notify_on_repeat_buy: true         # dashboard notice when net unchanged
+  resolution_source: data_api_isResolved
+  tp_sl_suspend_mirror_until_flat: true  # suspend re-entry after TP/SL until net ~0
+  max_slippage_pct: null             # live only; null = off
 ```
 
 ## Review / Execution / Paper

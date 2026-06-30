@@ -60,6 +60,21 @@ Documentation is organized by domain, mirroring the structure of `spec.md` (§ s
 | [component-interfaces.md](architecture/component-interfaces.md) | IngestionAdapter, ExecutionAdapter, Engine | arch §4 |
 | [document-history.md](architecture/document-history.md) | Spec version changelog | spec §21 |
 
+## [Phases](phases/)
+| File | Covers | Source |
+|------|--------|--------|
+| [_index.md](phases/_index.md) | Master phase index, dependency graph, critical path | spec §16, arch §12 |
+| [phase0-bootstrap.md](phases/phase0-bootstrap.md) | ✅ Complete — repo skeleton, config, DB, Alembic, test infra | Phase 0 |
+| [phase1-manual-seed.md](phases/phase1-manual-seed.md) | CLI to seed parent wallets + create cluster rows | spec §16.1 |
+| [phase2-parent-watcher.md](phases/phase2-parent-watcher.md) | Ingestion adapter, polling, event detection, scheduler, scorer | spec §16.2, §4, §5 |
+| [phase3a-engine-core.md](phases/phase3a-engine-core.md) | FSM, net calc, entry/exit rules, hedge filter, reentry, processor | spec §16.3, §6, §7, §8 |
+| [phase3b-paper-execution.md](phases/phase3b-paper-execution.md) | ExecutionAdapter, orderbook walk, session manager, event logger | spec §16.3, §10, §12 |
+| [phase4-reconciliation.md](phases/phase4-reconciliation.md) | Balance multicall, reconciliation scanner, RPC batching | spec §16.4, §8.2 |
+| [phase5-dashboard-api.md](phases/phase5-dashboard-api.md) | FastAPI routes for alerts, positions, sessions, config | spec §16.5, §11, §12 |
+| [phase6-backtesting.md](phases/phase6-backtesting.md) | Backtest runner, score validation, historical replay | spec §16.6, §17 |
+| [phase7-auto-discovery.md](phases/phase7-auto-discovery.md) | Full discovery pipeline, auto-flagging with minClusterScore | spec §16.7, §4.3 |
+| [phase8-live-execution.md](phases/phase8-live-execution.md) | Live ExecutionAdapter, real CLOB order signing | spec §16.8, §10 |
+
 ---
 
 ## AI Agent — Documentation Conventions
