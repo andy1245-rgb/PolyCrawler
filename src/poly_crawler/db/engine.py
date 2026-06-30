@@ -1,8 +1,10 @@
 """Async DB engine, session factory, and dependency."""
 
+import os
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
@@ -10,24 +12,34 @@ from sqlalchemy.ext.asyncio import (
 
 from ..config.schema import Config
 
-_engine = None
-_session_factory = None
+_engine: AsyncEngine | None = None
+_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def init_engine(config: Config, database_url: str | None = None):
+def init_engine(config: Config, database_url: str | None = None) -> None:
     """Initialise the global async engine and session factory.
 
-    Called once at startup. Uses the provided *database_url* or falls back
-    to ``POLY_DATABASE_URL`` / ``DATABASE_URL`` environment variables.
+    Called once at startup. Resolution order for the database URL:
+    1. Explicit *database_url* argument
+    2. ``config.database_url`` (set via ``POLY_DATABASE_URL`` env or YAML)
+    3. ``DATABASE_URL`` environment variable
+    4. ``postgresql+asyncpg://localhost:5432/poly_crawler`` (default)
     """
     global _engine, _session_factory
 
-    db_url = database_url or "postgresql+asyncpg://localhost:5432/poly_crawler"
+    db_url = (
+        database_url
+        or config.database_url
+        or os.environ.get("DATABASE_URL")
+        or "postgresql+asyncpg://localhost:5432/poly_crawler"
+    )
     _engine = create_async_engine(db_url, pool_size=5, max_overflow=10)
-    _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
+    _session_factory = async_sessionmaker(
+        _engine, class_=AsyncSession, expire_on_commit=False
+    )
 
 
-async def close_engine():
+async def close_engine() -> None:
     """Dispose the engine. Called at shutdown."""
     global _engine
     if _engine:

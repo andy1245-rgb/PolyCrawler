@@ -37,6 +37,11 @@ exit:
   stop_loss_pct: 0.25
   max_hold_hours: null
   close_on_resolution: true
+  add_on_repeat_buy: false
+  notify_on_repeat_buy: true
+  resolution_source: data_api_isResolved
+  tp_sl_suspend_mirror_until_flat: true
+  max_slippage_pct: null  # live only; off by default
 
 review:
   mode: live_only

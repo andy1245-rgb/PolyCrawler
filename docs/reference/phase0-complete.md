@@ -281,7 +281,7 @@ to:
 | 8 | `scripts/validate_schema.py` | 23 | Build |
 | 9 | `README.md` | 22 (1 changed) | Docs |
 
-> **Note:** `tests/fixtures/labeled_wallets.json`, `sample_events.json`, and `sample_orderbook.json` are **planned for Phases 1–3** (see [project-structure.md](../architecture/project-structure.md)). Only the `__init__.py` package marker was created in Phase 0.
+> **Note:** `tests/fixtures/labeled_wallets.json`, `sample_events.json`, and `sample_orderbook.json` were created in Phase 0 alongside the conftest. They'll be expanded (more wallets, more events) as Phases 2–6 are implemented.
 
 ---
 
@@ -295,7 +295,7 @@ to:
 | All 11 DB models | ✅ Complete | `src/poly_crawler/db/models/*.py` |
 | Alembic setup | ✅ Complete | `alembic.ini`, `alembic/env.py`, `alembic/versions/0001_initial.py` |
 | Application entry point | ✅ Complete | `src/poly_crawler/main.py` |
-| Test infrastructure | ✅ Complete (conftest + package marker; fixture JSON files planned for Phases 1–3) | `tests/conftest.py`, `tests/fixtures/__init__.py` |
+| Test infrastructure | ✅ Complete (conftest + all 3 fixture JSON files) | `tests/conftest.py`, `tests/fixtures/*.json` |
 | Build tooling | ✅ Complete | `Makefile`, `scripts/dev.ps1`, `scripts/validate_schema.py` |
 | Production config | ✅ Complete | `config/production.yaml` |
 | Documentation | ✅ Complete | `docs/reference/phase0-complete.md` |

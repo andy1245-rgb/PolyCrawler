@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from typing import Literal, Optional
+
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional, Literal
 
 
 class DiscoveryWeights(BaseModel):
@@ -44,6 +45,11 @@ class ExitConfig(BaseModel):
     stop_loss_pct: float = 0.25
     max_hold_hours: Optional[int] = None
     close_on_resolution: bool = True
+    add_on_repeat_buy: bool = False
+    notify_on_repeat_buy: bool = True
+    resolution_source: Literal["data_api_isResolved"] = "data_api_isResolved"
+    tp_sl_suspend_mirror_until_flat: bool = True
+    max_slippage_pct: Optional[float] = None
 
 
 class ReviewConfig(BaseModel):
@@ -96,6 +102,8 @@ class Config(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    database_url: Optional[str] = None
 
     discovery: DiscoveryConfig = DiscoveryConfig()
     entry: EntryConfig = EntryConfig()

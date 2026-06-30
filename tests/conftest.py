@@ -1,8 +1,8 @@
 """Shared test fixtures — async engine, session, and factories."""
 
 from collections.abc import AsyncGenerator
-from uuid import UUID, uuid4
 from datetime import datetime, timezone
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio

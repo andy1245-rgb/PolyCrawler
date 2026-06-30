@@ -17,9 +17,12 @@
 
 ## 1. Project structure
 
+> For the current on-disk state with phase annotations, see [project-structure.md](architecture/project-structure.md).
+> The tree below shows the planned end-state structure when all phases are complete.
+
 ```
 poly-crawler/
-├── pyproject.toml                        # Dependencies, metadata
+├── pyproject.toml                        # Dependencies, metadata, CLI entry point
 ├── Makefile                              # Common commands
 ├── alembic.ini                           # Migration config
 ├── alembic/
@@ -31,6 +34,7 @@ poly-crawler/
 │   └── poly_crawler/
 │       ├── __init__.py
 │       ├── main.py                       # App lifecycle, startup/shutdown
+│       ├── cli.py                        # CLI entry point — seed, discover (Phase 1)
 │       ├── config/
 │       │   ├── __init__.py
 │       │   ├── loader.py                 # YAML + env → Pydantic
@@ -38,19 +42,21 @@ poly-crawler/
 │       ├── db/
 │       │   ├── __init__.py
 │       │   ├── engine.py                 # Async engine, session factory
-│       │   └── models/                   # SQLAlchemy ORM models
-│       │       ├── __init__.py
-│       │       ├── parent.py
-│       │       ├── account.py
-│       │       ├── cluster.py
-│       │       ├── cluster_position.py
-│       │       ├── alert.py
-│       │       ├── paper_trade.py
-│       │       ├── session.py
-│       │       ├── balance_snapshot.py
-│       │       ├── rpc_log.py
-│       │       ├── backtest_run.py
-│       │       └── config_snapshot.py
+│       │   ├── models/                   # SQLAlchemy ORM models
+│       │   │   ├── __init__.py
+│       │   │   ├── parent.py
+│       │   │   ├── account.py
+│       │   │   ├── cluster.py
+│       │   │   ├── cluster_position.py
+│       │   │   ├── alert.py
+│       │   │   ├── paper_trade.py
+│       │   │   ├── session.py
+│       │   │   ├── balance_snapshot.py
+│       │   │   ├── rpc_log.py
+│       │   │   ├── backtest_run.py
+│       │   │   └── config_snapshot.py
+│       │   └── repositories/             # Repository layer (Phase 1)
+│       │       └── parent_repo.py        # Parent/cluster DB operations
 │       ├── ingestion/
 │       │   ├── __init__.py
 │       │   ├── base.py                   # Abstract IngestionAdapter
@@ -59,7 +65,8 @@ poly-crawler/
 │       │       ├── adapter.py            # PollingIngestionAdapter
 │       │       ├── rpc_client.py         # web3.py Polygon calls
 │       │       ├── data_api.py           # Polymarket Data API client
-│       │       └── event_detector.py     # FUND/BIRTH/TRADE detection
+│       │       ├── event_detector.py     # FUND/BIRTH/TRADE detection
+│       │       └── multicall.py          # Multicall3 batch reads (Phase 4)
 │       ├── clustering/
 │       │   ├── __init__.py
 │       │   ├── tracer.py                 # Parent → account tracing
@@ -73,28 +80,39 @@ poly-crawler/
 │       │   ├── entry_rules.py            # §7.1 entry conditions
 │       │   ├── exit_rules.py             # §8 exit conditions
 │       │   ├── hedge_filter.py           # §7.5 hedge modes
-│       │   └── reentry.py                # §7.6 follow re-entry
+│       │   ├── reentry.py                # §7.6 follow re-entry
+│       │   └── reconciliation.py         # Balance reconciliation (Phase 4)
 │       ├── execution/
 │       │   ├── __init__.py
 │       │   ├── base.py                   # Abstract ExecutionAdapter
-│       │   └── paper/                    # Default paper implementation
+│       │   ├── paper/                    # Default paper implementation
+│       │   │   ├── __init__.py
+│       │   │   ├── adapter.py            # PaperExecutionAdapter
+│       │   │   └── orderbook_walk.py     # §10.1 fill model
+│       │   └── live/                     # Live implementation (Phase 8)
 │       │       ├── __init__.py
-│       │       ├── adapter.py            # PaperExecutionAdapter
-│       │       └── orderbook_walk.py     # §10.1 fill model
+│       │       ├── adapter.py            # LiveExecutionAdapter
+│       │       ├── clob_client.py        # Polymarket CLOB client
+│       │       └── credentials.py        # Wallet credential management
 │       ├── analytics/
 │       │   ├── __init__.py
 │       │   ├── session_manager.py        # Session lifecycle
 │       │   ├── event_logger.py           # Structured event persistence
-│       │   └── aggregator.py             # Global rollups
+│       │   ├── aggregator.py             # Global rollups (Phase 5)
+│       │   ├── backtest_runner.py        # Backtest executor (Phase 6)
+│       │   ├── backtest_stats.py         # Result aggregation (Phase 6)
+│       │   └── event_replay.py           # Historical event loader (Phase 6)
 │       ├── api/
 │       │   ├── __init__.py
-│       │   ├── app.py                    # FastAPI app factory
+│       │   ├── app.py                    # FastAPI app factory (Phase 5)
+│       │   ├── schemas.py                # Pydantic response models (Phase 5)
 │       │   └── routes/
 │       │       ├── __init__.py
 │       │       ├── alerts.py
 │       │       ├── positions.py
 │       │       ├── sessions.py
-│       │       └── config.py
+│       │       ├── config.py
+│       │       └── stats.py
 │       └── scheduler/
 │           ├── __init__.py
 │           ├── manager.py                # asyncio task orchestration
@@ -103,6 +121,25 @@ poly-crawler/
 │   ├── conftest.py                       # Fixtures, test DB, mocks
 │   ├── unit/
 │   │   ├── test_scorer.py
+│   │   ├── test_state_machine.py
+│   │   ├── test_entry_rules.py
+│   │   ├── test_exit_rules.py
+│   │   ├── test_net_calculator.py
+│   │   ├── test_hedge_filter.py
+│   │   └── test_reentry.py
+│   ├── integration/
+│   │   ├── test_ingestion_polling.py
+│   │   ├── test_engine_cycle.py
+│   │   └── test_paper_execution.py
+│   └── fixtures/
+│       ├── labeled_wallets.json
+│       ├── sample_events.json
+│       └── sample_orderbook.json
+└── docs/
+    ├── architecture.md                   # This document
+    └── phases/                           # Phase-by-phase implementation docs
+        └── _index.md
+```
 │   │   ├── test_state_machine.py
 │   │   ├── test_entry_rules.py
 │   │   ├── test_exit_rules.py
@@ -727,29 +764,45 @@ Frontend: TBD (API-first in v0.1, frontend in a later design pass).
 | `test_engine_cycle.py` | Full cycle: events → FSM → trades, DB persistence |
 | `test_paper_execution.py` | Orderbook walk with mock CLOB data, fill accuracy |
 
-### 11.3 Test fixtures (planned)
+### 11.3 Test fixtures
 
-The following fixture files are planned for Phases 1–3 (created alongside their dependent tests). Currently only `tests/fixtures/__init__.py` exists as a package marker.
+The following fixture files exist in `tests/fixtures/` (created in Phase 0):
 
-- `labeled_wallets.json` (Phase 1+): ~20 wallets with known profit/efficiency/winrate
-- `sample_events.json` (Phase 1+): Pre-built FUND/BIRTH/TRADE events
-- `sample_orderbook.json` (Phase 3+): CLOB order books at various depths
+- `labeled_wallets.json`: 1 known parent with 3 siblings, cluster_score 18.3 (expand to ~20 wallets for Phase 6)
+- `sample_events.json`: 3 events — fund ($5k), birth (new account), trade (1k yes @ 0.45)
+- `sample_orderbook.json`: Bid/ask levels for Yes and No on a sample market
 
 ---
 
 ## 12. Build order
 
-| Order | Phase (spec §16) | Deliverable | Key modules |
-|-------|-------------------|-------------|-------------|
-| 0 | **Bootstrap** | pyproject.toml, package skeleton, config loading, alembic setup, test harness | config/, db/, tests/conftest.py |
-| 1 | **Manual seed** (§16.1) | parents, accounts, clusters tables & migration. CLI to seed parent wallets | db/models/, alembic/ |
-| 2 | **Parent watcher** (§16.2) | IngestionAdapter, polling impl, FUND/BIRTH detection, alert creation, scheduler task | ingestion/, scheduler/ |
-| 3 | **Paper engine** (§16.3) | All remaining tables. State machine, net calc, entry/exit rules, hedge filter, re-entry, paper execution, orderbook walk, full poll cycle | engine/, execution/paper/, analytics/ |
-| 4 | **Reconciliation** (§16.4) | Balance multicall, reconciliation scanner, rpc_logs | engine/ (reconciliation), ingestion/ |
-| 5 | **Dashboard** (§16.5) | FastAPI app, alert/position/session/config routes | api/ |
-| 6 | **Backtesting** (§16.6) | Backtest framework, score validation script, historical replay | scripts/, backtest models |
-| 7 | **Auto-discovery** (§16.7) | Discovery pipeline, auto-flagging with minClusterScore | clustering/ |
-| 8 | **Live** (§16.8) | Live execution adapter, real CLOB submission | execution/live/ |
+The project is built in 9 phases (0–8). Each phase has a dedicated doc in `docs/phases/` with full detail: goals, modules, interfaces, data flows, config changes, DB changes, test plans, and acceptance criteria.
+
+**Full phase documentation:** [docs/phases/_index.md](phases/_index.md)
+
+| Phase | Name | Status | Deliverable | Key modules |
+|-------|------|--------|-------------|-------------|
+| [0](phases/phase0-bootstrap.md) | Bootstrap | ✅ Complete | pyproject.toml, package skeleton, config loading, alembic setup, test harness | config/, db/, tests/conftest.py |
+| [1](phases/phase1-manual-seed.md) | Manual seed | ⬜ | CLI to seed parent wallets + create cluster rows | cli.py, db/repositories/ |
+| [2](phases/phase2-parent-watcher.md) | Parent watcher + scoring | ⬜ | IngestionAdapter, polling, event detection, scheduler, scorer | ingestion/, clustering/, scheduler/ |
+| [3a](phases/phase3a-engine-core.md) | Engine core | ⬜ | FSM, net calc, entry/exit rules, hedge filter, reentry, processor | engine/ |
+| [3b](phases/phase3b-paper-execution.md) | Paper execution | ⬜ | ExecutionAdapter, orderbook walk, session manager, event logger | execution/paper/, analytics/ |
+| [4](phases/phase4-reconciliation.md) | Reconciliation + RPC batching | ⬜ | Balance multicall, reconciliation scanner, RPC log cleanup | engine/reconciliation.py, ingestion/multicall.py |
+| [5](phases/phase5-dashboard-api.md) | Dashboard API | ⬜ | FastAPI routes for alerts, positions, sessions, config, stats | api/ |
+| [6](phases/phase6-backtesting.md) | Backtesting | ⬜ | Backtest runner, score validation, historical replay | analytics/backtest_runner.py, scripts/validate_scores.py |
+| [7](phases/phase7-auto-discovery.md) | Auto-discovery | ⬜ | Full discovery pipeline, auto-flagging with minClusterScore | clustering/discovery.py |
+| [8](phases/phase8-live-execution.md) | Live execution | ⬜ | Live ExecutionAdapter, real CLOB order signing | execution/live/ |
+
+### Critical path
+
+**Phase 1 → 2 → 3a → 3b → 4** — delivers a working paper-trading pipeline.
+
+### Parallelization
+
+- Phase 2 scoring is pure math — develop alongside ingestion adapter.
+- Phase 3a can start once Phase 2's `RawEvent` shape is stable.
+- Phase 5 (API) can start in parallel with Phase 4.
+- Phase 6 and 7 are independent but both depend on Phase 3b.
 
 ---
 
