@@ -1,6 +1,6 @@
 # Tech Stack
 
-**Source:** spec.md §15
+**Source:** spec-full.md §15
 
 ---
 

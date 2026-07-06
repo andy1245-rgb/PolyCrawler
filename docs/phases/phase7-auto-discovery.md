@@ -1,8 +1,8 @@
 # Phase 7 — Auto-Discovery
 
-**Source:** spec.md §16.7, §4.3 | docs/architecture.md §12
 **Status:** ⬜ Not started
-**Prerequisites:** [Phase 3b](phase3b-paper-execution.md) complete (paper engine proven) + [Phase 6](phase6-backtesting.md) (score validation done)
+**Prerequisites:** [Phase 3b](phase3b-paper-execution.md) + [Phase 6](phase6-backtesting.md) complete
+**Human-readable docs:** [clustering.md](../discovery/clustering.md), [new-account-detection.md](../discovery/new-account-detection.md)
 
 ---
 
@@ -10,23 +10,32 @@
 
 Replace manual parent seeding with automated cluster-score-based flagging. The system finds its own parents to watch by scanning for wallet clusters that meet discovery criteria. Manual seeding remains available as a fallback, but the system no longer depends on it.
 
-## Spec references
+---
 
-- spec §4.3 — Discovery: flagging parents (minSiblingCount, minClusterScore, fundingHops)
-- spec §4.1.1 — Formula validation (enable minClusterScore after validation script confirms variant)
-- spec §16.7 — Auto-discovery deliverable
-- spec §13 — End-to-end flow (auto-discovery after engine is proven)
+## Behavioral specification
 
-## Prerequisites
+### Auto-flagging rules
 
-- Phase 3b complete: paper engine proven profitable
-- Phase 6 complete: `validate_scores.py` has confirmed the best score variant and recommended a `min_cluster_score` threshold
-- `min_cluster_score` config value set (no longer `null`)
-- Phase 2 scoring module (`clustering/scorer.py`) fully working
+```yaml
+discovery:
+  minSiblingCount: 2
+  minClusterScore: null    # when set, OVERRIDES minSiblingCount
+  fundingHops: 3
+```
+
+- Manual seed always supported; `is_ignored: true` parents excluded.
+- **Gate:** enable auto-discovery only after paper engine + score validation (Phase 6) prove profitable results.
+- When `minClusterScore` is set, it replaces `minSiblingCount` for auto-flag decisions.
+
+### Discovery pipeline
+
+Scan funding graph → trace siblings → score cluster → flag parent if criteria met → same Protocol 1 watch flow as manual seed.
+
+---
 
 ## Gate condition
 
-**Spec is explicit:** auto-discovery is only enabled after the paper engine is proven. Do NOT start this phase until Phase 3b + Phase 6 validate that the scoring formula and trading rules produce profitable results.
+Do NOT start until Phase 3b + Phase 6 validate scoring formula and trading rules.
 
 ## Modules to build
 

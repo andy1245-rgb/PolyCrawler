@@ -1,6 +1,6 @@
 # Database Schema
 
-**Source:** spec.md §19 | docs/architecture.md §2
+**Source:** spec-full.md §19 | docs/architecture.md §2
 
 ---
 

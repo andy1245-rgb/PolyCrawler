@@ -1,8 +1,8 @@
 # Phase 5 — Dashboard API
 
-**Source:** spec.md §16.5, §11, §12 | docs/architecture.md §10
 **Status:** ⬜ Not started
-**Prerequisites:** [Phase 4](phase4-reconciliation.md) complete (can start in parallel — routes don't depend on reconciliation)
+**Prerequisites:** [Phase 3b](phase3b-paper-execution.md) complete (can start in parallel with Phase 4)
+**Human-readable docs:** [alerts.md](../operations/alerts.md), [sessions-and-analytics.md](../operations/sessions-and-analytics.md), [api-routes.md](../reference/api-routes.md)
 
 ---
 
@@ -10,18 +10,33 @@
 
 Build FastAPI routes that expose the crawler's data to a dashboard frontend. Alerts, positions, sessions, and config are all queryable. The false-positive labeling button works. This phase makes the system observable without reading raw DB tables.
 
-## Spec references
+---
 
-- spec §11 — Alerts (dashboard is the only alert surface in v0.1.0)
-- spec §12 — Sessions & analytics (session lifecycle, global analytics, inclusion toggles)
-- spec §12.3 — Data to persist (false-positive labels, analytics-first)
-- arch §10 — API layer (routes, stack, app factory)
+## Behavioral specification
 
-## Prerequisites
+### Alerts (v0.1)
 
-- Phase 3b complete: `paper_trades`, `alerts`, `sessions` have real data
-- FastAPI app exists in `main.py` (Phase 0)
-- Can start in parallel with Phase 4 — routes read from DB, don't depend on reconciliation
+- **Dashboard** is the only alert surface in v0.1.
+- Include `CONFLICT` and `CONFLICT_RESOLVED` when sibling opposing positions start/end.
+- False-positive labeling: dashboard button sets `alerts.is_false_positive`.
+- Telegram/Discord/webhooks deferred; schema reserves `alert_channel`.
+
+### Sessions & global analytics
+
+- User can include/exclude sessions from global stats (post-hoc in UI).
+- Run analytics on all, selected, or filtered sessions.
+- Private sessions (default off) excluded from saved analytics.
+
+### Analytics data exposed via API
+
+Alerts, positions, paper trades, session summaries, config snapshots — see [api-routes.md](../reference/api-routes.md).
+
+---
+
+## Implementation prerequisites
+
+- Phase 3b: real data in `paper_trades`, `alerts`, `sessions`
+- FastAPI app from Phase 0
 
 ## Modules to build
 

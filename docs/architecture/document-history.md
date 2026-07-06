@@ -1,11 +1,12 @@
 # Document History
 
-**Source:** spec.md §21
+**Source:** spec-full.md §21
 
 ---
 
 | Version | Changes |
 |---------|---------|
+| v0.1.5-doc | Spec split into self-contained phase docs; spec-full.md archived; §6.2 formatting fixed; Phase 3a split into FSM + trading rules |
 | v0.1.5 | CLOSED clarified (§6.2); rename → tp_sl_suspended; §7.7 TP/SL wording aligned |
 | v0.1.4 | Full cluster×market state machine (§6); expanded §7.5 hedge modes; position/watch config |
 | v0.1.3 | Cluster-centric entry (§7.1), exits (§8), re-entry (§7.6), analytics/schema; hedgeFilterMode default net_only (§7.5); §6 redesign flagged; #6–#9 resolved |

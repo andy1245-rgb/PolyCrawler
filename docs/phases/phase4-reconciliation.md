@@ -1,8 +1,8 @@
 # Phase 4 — Reconciliation + RPC Batching
 
-**Source:** spec.md §16.4, §8.2 | docs/architecture.md §6
 **Status:** ⬜ Not started
-**Prerequisites:** [Phase 3b](phase3b-paper-execution.md) complete (paper trading pipeline works end-to-end)
+**Prerequisites:** [Phase 3b](phase3b-paper-execution.md) complete
+**Human-readable docs:** [exit-rules.md](../protocols/exit-rules.md) (reconciliation section)
 
 ---
 
@@ -10,19 +10,29 @@
 
 Harden the paper engine against polling gaps. Add authoritative balance rebuilds from the Data API (reconciliation) and batch RPC calls (multicall) for efficiency. This phase catches missed events and ensures net exposure stays accurate even when polling misses trades between cycles.
 
-## Spec references
+---
 
-- spec §8.2 — Position reconciliation (rebuild balances from Data API, mirror implied delta)
-- spec §5.1 — Scanners (position balance scanner, reconciliation)
-- spec §6.4 — Event processor step 1: "Reconciliation overwrites balances from Data API — always wins over event path"
-- spec §15 — Tech stack: "RPC batching: web3.py + multicall for balance checks"
-- arch §6 — Task scheduling (reconciliation every 3rd balance poll)
+## Behavioral specification
 
-## Prerequisites
+### Position reconciliation (§8.2)
 
-- Phase 3b complete: full paper cycle works, `paper_trades` being persisted
-- `PollingIngestionAdapter.fetch_balances()` implemented (Phase 2)
-- `RpcClient` with multicall capability (Phase 2)
+Each poll, rebuild all sibling balances per market from Data API (or RPC batch). Recompute cluster net.
+
+- Reconciliation **overwrites** event-derived balances — always wins.
+- If net changed vs `last_known_net` without matching trade events, mirror implied delta.
+- Log `exitReason: reconciled` when net → ~0.
+
+Runs every Nth balance poll (default: every 3rd).
+
+### RPC batching
+
+Multicall3 on Polygon for batch reads. All calls logged to `rpc_logs`. Retention: 90 days default.
+
+---
+
+## Implementation prerequisites
+
+- Phase 3b complete; `fetch_balances()` from Phase 2; `RpcClient` from Phase 2
 
 ## Modules to build
 

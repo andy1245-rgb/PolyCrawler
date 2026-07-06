@@ -1,6 +1,6 @@
 # Open Questions & Resolutions
 
-**Source:** spec.md §20
+**Source:** spec-full.md §20
 
 ---
 

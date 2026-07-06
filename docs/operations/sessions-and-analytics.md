@@ -1,6 +1,6 @@
 # Sessions & Analytics
 
-**Source:** spec.md §12
+**Source:** spec-full.md §12
 
 ---
 

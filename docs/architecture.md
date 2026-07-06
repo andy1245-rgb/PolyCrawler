@@ -767,7 +767,8 @@ The project is built in 9 phases (0–8). Each phase has a dedicated doc in `doc
 | [0](phases/phase0-bootstrap.md) | Bootstrap | ✅ Complete | pyproject.toml, package skeleton, config loading, alembic setup, test harness | config/, db/, tests/conftest.py |
 | [1](phases/phase1-manual-seed.md) | Manual seed | ⬜ | CLI to seed parent wallets + create cluster rows | cli.py, db/repositories/ |
 | [2](phases/phase2-parent-watcher.md) | Parent watcher + scoring | ⬜ | IngestionAdapter, polling, event detection, scheduler, scorer | ingestion/, clustering/, scheduler/ |
-| [3a](phases/phase3a-engine-core.md) | Engine core | ⬜ | FSM, net calc, entry/exit rules, hedge filter, reentry, processor | engine/ |
+| [3a](phases/phase3a-fsm-and-net.md) | FSM + net calculator | ⬜ | Position FSM, net calc, processor | engine/state_machine.py, net_calculator.py, processor.py |
+| [3a](phases/phase3a-trading-rules.md) | Trading rules | ⬜ | Entry, exit, hedge filter, re-entry, review | engine/entry_rules.py, exit_rules.py, hedge_filter.py, reentry.py |
 | [3b](phases/phase3b-paper-execution.md) | Paper execution | ⬜ | ExecutionAdapter, orderbook walk, session manager, event logger | execution/paper/, analytics/ |
 | [4](phases/phase4-reconciliation.md) | Reconciliation + RPC batching | ⬜ | Balance multicall, reconciliation scanner, RPC log cleanup | engine/reconciliation.py, ingestion/multicall.py |
 | [5](phases/phase5-dashboard-api.md) | Dashboard API | ⬜ | FastAPI routes for alerts, positions, sessions, config, stats | api/ |
@@ -777,12 +778,12 @@ The project is built in 9 phases (0–8). Each phase has a dedicated doc in `doc
 
 ### Critical path
 
-**Phase 1 → 2 → 3a → 3b → 4** — delivers a working paper-trading pipeline.
+**Phase 1 → 2 → 3a (both) → 3b → 4** — delivers a working paper-trading pipeline.
 
 ### Parallelization
 
 - Phase 2 scoring is pure math — develop alongside ingestion adapter.
-- Phase 3a can start once Phase 2's `RawEvent` shape is stable.
+- Phase 3a FSM and Phase 3a rules can develop in parallel once Phase 2's `RawEvent` shape is stable.
 - Phase 5 (API) can start in parallel with Phase 4.
 - Phase 6 and 7 are independent but both depend on Phase 3b.
 

@@ -1,8 +1,8 @@
 # Phase 6 — Backtesting
 
-**Source:** spec.md §16.6, §17 | docs/architecture.md §12
 **Status:** ⬜ Not started
-**Prerequisites:** [Phase 3b](phase3b-paper-execution.md) complete (paper engine works)
+**Prerequisites:** [Phase 3b](phase3b-paper-execution.md) complete
+**Human-readable docs:** [clustering.md](../discovery/clustering.md) (score validation)
 
 ---
 
@@ -10,19 +10,29 @@
 
 Replay historical scenarios against the paper engine to compare PnL under different configs. Validate the three scoring variants (A/B/C) against labeled wallets. This phase lets you answer "what min_buy / TP / SL / discovery threshold actually worked?" without risking capital or re-running live.
 
-## Spec references
+---
 
-- spec §17 — Backtesting (replay historical scenarios, compare PnL, data sources)
-- spec §4.1.1 — Formula validation (implement A/B/C, ship validation script on ~20 labeled wallets)
-- spec §16.6 — Backtesting deliverable
-- spec §12.2 — Global analytics (include/exclude sessions, run analytics on selected/filtered)
+## Behavioral specification
 
-## Prerequisites
+### Backtesting
 
-- Phase 3b complete: `Engine`, `PaperExecutionAdapter`, `EventLogger` all working
-- `backtest_runs` table exists (Phase 0)
-- `labeled_wallets.json` fixture with known-good wallet classifications
-- Historical event data available (from Dune query or Data API local store)
+- Replay historical scenarios against watcher + paper trader.
+- Compare hypothetical PnL under configs (`minBuyUsd`, `maxOdds`, cluster weights, discovery thresholds).
+- **Data sources:** Dune for initial formula tuning; Data API local store for ongoing replays.
+- Store runs as sessions with `mode: backtest`.
+
+### Score validation (gate for Phase 7)
+
+Validation script computes score variants **A (log), B (sqrt), C (piecewise)** on ~20 labeled wallets (10 suspicious, 10 normal) before enabling `discovery.minClusterScore`.
+
+Runtime default: **sqrt (variant B)**.
+
+---
+
+## Implementation prerequisites
+
+- Phase 3b: Engine + PaperExecutionAdapter working
+- `backtest_runs` table; `labeled_wallets.json` fixture
 
 ## Modules to build
 

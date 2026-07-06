@@ -1,6 +1,7 @@
 # Protocol 5 — Review & Autonomy
 
-**Source:** spec.md §9
+**Source:** spec-full.md §9
+**Implementation:** [phase3a-trading-rules.md](../phases/phase3a-trading-rules.md)
 
 ---
 

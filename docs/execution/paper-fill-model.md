@@ -1,6 +1,7 @@
 # Paper Fill Model — Orderbook Walk
 
-**Source:** spec.md §10.1 | docs/architecture.md §8
+**Source:** spec-full.md §10.1 | docs/architecture.md §8
+**Implementation:** [phase3b-paper-execution.md](../phases/phase3b-paper-execution.md)
 
 ---
 

@@ -1,6 +1,6 @@
 # Data Retention
 
-**Source:** spec.md §18
+**Source:** spec-full.md §18
 
 ---
 

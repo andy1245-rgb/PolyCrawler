@@ -1,6 +1,6 @@
 # Configuration Reference
 
-**Source:** spec.md §14 | docs/architecture.md §3
+**Source:** spec-full.md §14 | docs/architecture.md §3
 
 ---
 

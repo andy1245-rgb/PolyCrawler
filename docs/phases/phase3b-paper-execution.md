@@ -1,8 +1,8 @@
 # Phase 3b — Paper Execution
 
-**Source:** spec.md §16.3 (pt 2), §10, §10.1, §12 | docs/architecture.md §4.2, §8
 **Status:** ⬜ Not started
-**Prerequisites:** [Phase 3a](phase3a-engine-core.md) complete (engine produces Actions, FSM works)
+**Prerequisites:** [Phase 3a FSM](phase3a-fsm-and-net.md) + [Phase 3a Rules](phase3a-trading-rules.md) complete
+**Human-readable docs:** [modes.md](../execution/modes.md), [paper-fill-model.md](../execution/paper-fill-model.md), [sessions-and-analytics.md](../operations/sessions-and-analytics.md)
 
 ---
 
@@ -10,20 +10,41 @@
 
 Replace the execution stub with a real paper trading adapter. When the engine produces an "enter" or "exit" Action, the paper adapter simulates a fill using the orderbook walk model. Trades are persisted to `paper_trades`, sessions are managed, and all events are logged for analytics. After this phase, the full paper-trading pipeline works end-to-end.
 
-## Spec references
+## Behavioral specification
 
-- spec §10 — Execution modes (observe/paper/live, shared engine, swappable adapter)
-- spec §10.1 — Paper fill model (orderbook walk at next poll, VWAP, slippage, pessimistic adjustment)
-- spec §12 — Sessions & analytics (session lifecycle, config snapshot, data to persist)
-- spec §7.2 — Recorded data on entry (market, cluster, net, fill, latency, session)
-- arch §4.2 — ExecutionAdapter abstract interface
-- arch §8 — Paper fill model pseudocode
+### Execution modes
 
-## Prerequisites
+| Mode | Detection | Trading | Capital |
+|------|-----------|---------|---------|
+| `observe` | On | None | $0 |
+| `paper` | On | Simulated | $0 |
+| `live` | On | Real orders | User funds (Phase 8) |
+
+Shared strategy engine; only the **execution adapter** swaps.
+
+### Paper fill model (orderbook walk at next poll)
+
+1. Wait for next poll cycle after signal.
+2. Fetch CLOB order book.
+3. Walk book for share count → VWAP.
+4. Persist book snapshot, levels consumed, avg price, slippage vs mid.
+5. Optional `paper.pessimisticSlippagePct` adverse adjustment.
+
+### Data to persist (entry / adjustment / exit)
+
+Market metadata, cluster id, cluster score snapshot, net before/after, delta, source sibling, event type, fill price, latency, session id, mode, review outcome.
+
+### Sessions
+
+Every run tagged with `sessionID`. Private sessions excluded from global analytics by default.
+
+---
+
+## Implementation prerequisites
 
 - Phase 3a complete: `Engine` produces `Action` objects, `PositionFSM` works
-- `IngestionAdapter.fetch_orderbook()` implemented in Phase 2
-- `paper_trades`, `sessions`, `config_snapshots` tables exist (Phase 0)
+- `IngestionAdapter.fetch_orderbook()` from Phase 2
+- `paper_trades`, `sessions`, `config_snapshots` tables from Phase 0
 
 ## Modules to build
 

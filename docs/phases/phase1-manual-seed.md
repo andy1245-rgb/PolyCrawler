@@ -1,161 +1,132 @@
 # Phase 1 — Manual Seed
 
-**Source:** spec.md §16.1 | docs/architecture.md §12
 **Status:** ⬜ Not started
 **Prerequisites:** [Phase 0](phase0-bootstrap.md) complete
+**Human-readable docs:** [clustering.md](../discovery/clustering.md) (manual seed section), [end-to-end-flow.md](../operations/end-to-end-flow.md)
 
 ---
 
 ## Goal
 
-Provide a CLI to hand-pick 5–10 parent wallets from research and insert them into the database. Each seeded parent gets a `clusters` row so it's immediately ready for the parent watcher (Phase 2). This is the simplest phase — no chain interaction, no polling, just DB writes and a command interface.
+Provide a CLI to hand-pick 5–10 parent wallets from research and insert them into the database. Each seeded parent gets a `clusters` row so it is ready for the parent watcher (Phase 2). No chain interaction — DB writes only.
 
-## Spec references
+---
 
-- spec §4.3 — Discovery: flagging parents (manual seed list always supported)
-- spec §16.1 — Manual seed deliverable
-- spec §13 — End-to-end flow (starts with manual parent seed)
+## Behavioral specification
 
-## Prerequisites
+### Manual seed is always supported
 
-- Phase 0 complete (DB models, config, engine all working)
-- `[project.scripts]` entry point added to `pyproject.toml` (✅ pre-flight fix done — `poly-crawler = "poly_crawler.cli:app"`)
-- `aiosqlite` installed (✅ pre-flight fix done)
-- `typer>=0.12.0` in core dependencies (✅ added)
-- A local Postgres running OR willingness to use the default `localhost:5432`
+Auto-discovery (Phase 7) supplements but never replaces manual seed. Researchers can flag parents before the scoring formula is validated.
 
-## Modules to build
+### Parent flagging (manual path)
 
-### 1. CLI entry point — `src/poly_crawler/cli.py`
+From discovery rules:
 
-A Click or Typer-based CLI that provides the `seed` command. This is the first user-facing interface beyond `uvicorn`.
+```yaml
+discovery:
+  minSiblingCount: 2       # auto-flag uses this; manual seed bypasses
+  minClusterScore: null      # when set (Phase 7), overrides minSiblingCount
+  fundingHops: 3
+```
 
-**Commands:**
+**Manual seed behavior:**
+
+1. User provides one or more parent wallet addresses (CLI flag or file).
+2. System validates Ethereum address format (42 chars, valid checksum via `eth-account`).
+3. For each new address: insert `parents` row (`is_ignored=false`), create linked `clusters` row (`cluster_score=0.0`, `score_variant="sqrt"`).
+4. Duplicate addresses are skipped (unique constraint on `chain_address`).
+5. `--ignore` sets `is_ignored=true` — excluded from watch and alert ranking.
+
+### What manual seed does NOT do
+
+- Does not trace siblings or fetch chain data (Phase 2).
+- Does not create `accounts` rows until FUND/BIRTH events arrive.
+- Does not trigger trades or alerts.
+
+### End-to-end context
+
+Manual seed is step 1 of the v0.1 pipeline:
+
+```
+MANUAL parent seed → parent watcher → rank by clusterScore → watch cluster → …
+```
+
+---
+
+## Implementation
+
+### Modules to build
+
+#### 1. `src/poly_crawler/cli.py`
 
 | Command | Purpose |
 |---------|---------|
-| `poly-crawler seed --parent 0xABC... [--parent 0xDEF...]` | Insert parent wallets + create cluster rows |
-| `poly-crawler seed --from-file parents.txt` | Bulk seed from a file (one address per line) |
-| `poly-crawler seed --list` | Show all seeded parents and their cluster scores |
-| `poly-crawler seed --ignore 0xABC...` | Set `is_ignored: true` on a parent |
+| `poly-crawler seed --parent 0xABC...` | Insert parent + cluster (repeatable flag) |
+| `poly-crawler seed --from-file parents.txt` | Bulk seed (one address per line) |
+| `poly-crawler seed --list` | Show seeded parents and cluster scores |
+| `poly-crawler seed --ignore 0xABC...` | Set `is_ignored: true` |
 
-**Interface:**
-
-```python
-# src/poly_crawler/cli.py
-import asyncio
-import typer
-from poly_crawler.config import load_config
-from poly_crawler.db import init_engine, get_session
-
-app = typer.Typer()
-
-@app.command()
-def seed(parent: list[str] = typer.Option(None), from_file: str = typer.Option(None)):
-    """Seed parent wallets into the database."""
-    asyncio.run(_seed(parents, from_file))
-
-async def _seed(addresses: list[str], from_file: str | None):
-    config = load_config()
-    init_engine(config)
-    # ... insert Parent + Cluster rows
-```
-
-### 2. Seed repository — `src/poly_crawler/db/repositories/parent_repo.py`
-
-A thin repository layer for parent/cluster DB operations. Keeps the CLI and future modules clean.
-
-**Functions:**
+#### 2. `src/poly_crawler/db/repositories/parent_repo.py`
 
 | Function | Purpose |
 |----------|---------|
-| `create_parent(session, chain_address) -> Parent` | Insert a parent, return the ORM object |
-| `create_cluster_for_parent(session, parent_id) -> Cluster` | Create the 1:1 cluster row |
-| `get_parent_by_address(session, chain_address) -> Parent | None` | Lookup |
-| `list_parents(session, include_ignored=False) -> list[Parent]` | List all seeded parents |
-| `ignore_parent(session, chain_address) -> None` | Set `is_ignored: true` |
+| `create_parent(session, chain_address) -> Parent` | Insert parent |
+| `create_cluster_for_parent(session, parent_id) -> Cluster` | 1:1 cluster row |
+| `get_parent_by_address(session, chain_address) -> Parent \| None` | Lookup |
+| `list_parents(session, include_ignored=False) -> list[Parent]` | List |
+| `ignore_parent(session, chain_address) -> None` | Set ignored |
 
-**New directory:** `src/poly_crawler/db/repositories/`
-
-### 3. pyproject.toml — CLI entry point
-
-Add to `pyproject.toml`:
-
-```toml
-[project.scripts]
-poly-crawler = "poly_crawler.cli:app"
-```
-
-### 4. Typer dependency
-
-Add `typer>=0.12.0` to core dependencies in `pyproject.toml`.
-
-## Data flow
+### Data flow
 
 ```
-User runs: poly-crawler seed --parent 0xABC... --parent 0xDEF...
-    │
-    ▼
-load_config() → init_engine(config)
-    │
-    ▼
-For each address:
-    1. Check if parent already exists (by chain_address)
-    2. If not, insert Parent row (chain_address, is_ignored=false, metadata={})
-    3. Create Cluster row (parent_id, cluster_score=0.0, score_variant="sqrt")
-    4. Commit
-    │
-    ▼
-Print summary: "Seeded 2 parents. Use --list to view."
+poly-crawler seed --parent 0xABC...
+  → load_config() → init_engine()
+  → for each address: validate → insert Parent → insert Cluster → commit
+  → print summary
 ```
+
+---
 
 ## Config changes
 
-None. This phase uses existing config + DB models.
+None.
+
+---
 
 ## DB changes
 
-None. All tables already exist from the Phase 0 migration. This phase only writes data, not schema.
+None — writes to existing `parents` and `clusters` tables only.
+
+---
 
 ## Test plan
 
-### Unit tests — `tests/unit/test_parent_repo.py`
+### Unit — `tests/unit/test_parent_repo.py`
 
-| Test | What it verifies |
-|------|-----------------|
-| `test_create_parent` | Parent inserted with correct chain_address, is_ignored=false |
-| `test_create_parent_duplicate_address` | Unique constraint on chain_address raises |
-| `test_create_cluster_for_parent` | Cluster created with parent_id, score 0.0, variant "sqrt" |
-| `test_get_parent_by_address` | Lookup by chain_address returns correct parent |
-| `test_get_parent_by_address_not_found` | Returns None for unknown address |
-| `test_list_parents_excludes_ignored` | Ignored parents filtered out by default |
-| `test_ignore_parent` | Sets is_ignored=true |
+- Create parent, duplicate constraint, cluster creation, lookup, list with ignore filter, ignore_parent
 
-### Integration tests — `tests/integration/test_seed_cli.py`
+### Integration — `tests/integration/test_seed_cli.py`
 
-| Test | What it verifies |
-|------|-----------------|
-| `test_seed_single_parent` | CLI creates parent + cluster via Typer's CliRunner |
-| `test_seed_multiple_parents` | Multiple --parent flags work |
-| `test_seed_from_file` | File input works (one address per line) |
-| `test_seed_duplicate_skipped` | Seeding an existing address doesn't duplicate |
-| `test_seed_list` | --list shows all parents |
+- Single/multiple seed, file input, duplicate skip, `--list`
+
+---
 
 ## Acceptance criteria
 
-- [ ] `pip install -e ".[dev]"` installs `poly-crawler` CLI command
-- [ ] `poly-crawler seed --parent 0xABC...` creates a `parents` row + `clusters` row
+- [ ] `pip install -e ".[dev]"` installs `poly-crawler` CLI
+- [ ] `poly-crawler seed --parent 0x…` creates `parents` + `clusters` rows
 - [ ] `poly-crawler seed --list` shows seeded parents
-- [ ] `poly-crawler seed --ignore 0xABC...` sets `is_ignored: true`
-- [ ] Seeding the same address twice doesn't create duplicates
-- [ ] All unit tests pass
-- [ ] All integration tests pass
-- [ ] `ruff check` and `mypy` pass clean
+- [ ] `poly-crawler seed --ignore 0x…` sets `is_ignored=true`
+- [ ] Duplicate addresses do not create duplicates
+- [ ] Invalid addresses rejected
+- [ ] All tests pass; `ruff` and `mypy` clean
+
+---
 
 ## Open decisions
 
-| # | Question | Notes |
-|---|----------|-------|
-| 1 | Click vs Typer for CLI | Typer recommended — async-friendly, type hints, FastAPI ecosystem alignment |
-| 2 | Should seed also fetch initial sibling accounts from chain? | No — that's Phase 2's job (parent watcher). Phase 1 is manual seed only. |
-| 3 | Should we validate address checksums? | Yes — reject invalid Ethereum addresses (not 42 chars, bad checksum). Use `eth-account` for validation. |
+| # | Question | Resolution |
+|---|----------|------------|
+| 1 | Click vs Typer | **Typer** — async-friendly, type hints |
+| 2 | Fetch siblings on seed? | **No** — Phase 2 |
+| 3 | Validate checksums? | **Yes** — `eth-account` |

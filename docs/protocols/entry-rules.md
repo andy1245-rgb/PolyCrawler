@@ -1,6 +1,7 @@
 # Protocol 3 — Entry Rules
 
-**Source:** spec.md §7 | docs/architecture.md §6
+**Source:** spec-full.md §7 | docs/architecture.md §6
+**Implementation:** [phase3a-trading-rules.md](../phases/phase3a-trading-rules.md)
 
 ---
 

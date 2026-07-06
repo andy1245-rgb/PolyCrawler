@@ -1,6 +1,6 @@
 # Glossary
 
-**Source:** spec.md §2
+**Source:** spec-full.md §2
 
 ---
 

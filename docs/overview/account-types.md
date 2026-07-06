@@ -1,6 +1,6 @@
 # Account Types
 
-**Source:** spec.md §3
+**Source:** spec-full.md §3
 
 ---
 

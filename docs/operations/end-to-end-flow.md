@@ -1,6 +1,6 @@
 # End-to-End Flow
 
-**Source:** spec.md §13
+**Source:** spec-full.md §13
 
 ---
 

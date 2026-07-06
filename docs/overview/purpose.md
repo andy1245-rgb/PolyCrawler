@@ -1,6 +1,6 @@
 # Purpose
 
-**Source:** spec.md §1
+**Source:** spec-full.md §1
 
 ---
 

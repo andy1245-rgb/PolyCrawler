@@ -1,12 +1,10 @@
 # Implementation Phases
 
-**Source:** spec.md §16 | docs/architecture.md §12
+**Source:** [spec-full.md](spec-full.md) §16 | [phases/_index.md](../phases/_index.md)
 
 ---
 
-The project is built in 9 phases (0–8). Each phase has a dedicated doc in `docs/phases/` with full detail: goals, modules, interfaces, data flows, config changes, DB changes, test plans, and acceptance criteria.
-
-**Full phase documentation:** [docs/phases/_index.md](../phases/_index.md)
+Each phase has a **self-contained spec** in `docs/phases/` (behavior + implementation). Start at [phases/_index.md](../phases/_index.md).
 
 ---
 
@@ -17,7 +15,8 @@ The project is built in 9 phases (0–8). Each phase has a dedicated doc in `doc
 | 0 | Bootstrap | ✅ Complete | [phase0-bootstrap.md](../phases/phase0-bootstrap.md) |
 | 1 | Manual seed | ⬜ Not started | [phase1-manual-seed.md](../phases/phase1-manual-seed.md) |
 | 2 | Parent watcher + scoring | ⬜ Not started | [phase2-parent-watcher.md](../phases/phase2-parent-watcher.md) |
-| 3a | Engine core | ⬜ Not started | [phase3a-engine-core.md](../phases/phase3a-engine-core.md) |
+| 3a | FSM + net calculator | ⬜ Not started | [phase3a-fsm-and-net.md](../phases/phase3a-fsm-and-net.md) |
+| 3a | Trading rules | ⬜ Not started | [phase3a-trading-rules.md](../phases/phase3a-trading-rules.md) |
 | 3b | Paper execution | ⬜ Not started | [phase3b-paper-execution.md](../phases/phase3b-paper-execution.md) |
 | 4 | Reconciliation + RPC batching | ⬜ Not started | [phase4-reconciliation.md](../phases/phase4-reconciliation.md) |
 | 5 | Dashboard API | ⬜ Not started | [phase5-dashboard-api.md](../phases/phase5-dashboard-api.md) |
@@ -27,13 +26,11 @@ The project is built in 9 phases (0–8). Each phase has a dedicated doc in `doc
 
 ## Critical path
 
-**Phase 1 → 2 → 3a → 3b → 4**
-
-This sequence delivers a working paper-trading pipeline. Everything after that (dashboard, backtest, auto-discovery, live) layers on top.
+**Phase 1 → 2 → 3a (both docs) → 3b → 4**
 
 ## Parallelization
 
-- **Phase 2 scoring** — pure math, can be developed alongside the ingestion adapter within the same phase.
-- **Phase 3a** can start once Phase 2's `RawEvent` shape is stable — test against mock events.
-- **Phase 5 (API)** can start in parallel with Phase 4 — routes don't depend on reconciliation.
-- **Phase 6 (backtesting)** and **Phase 7 (auto-discovery)** are independent but both depend on Phase 3b.
+- **Phase 2 scoring** — pure math; develop alongside ingestion adapter.
+- **Phase 3a FSM + Phase 3a rules** — can develop in parallel.
+- **Phase 5 (API)** — can start in parallel with Phase 4.
+- **Phase 6 and Phase 7** — independent; both need Phase 3b.

@@ -1,6 +1,7 @@
 # Protocol 4 — Exit Rules
 
-**Source:** spec.md §8 | docs/architecture.md §7
+**Source:** spec-full.md §8 | docs/architecture.md §7
+**Implementation:** [phase3a-trading-rules.md](../phases/phase3a-trading-rules.md), [phase4-reconciliation.md](../phases/phase4-reconciliation.md)
 
 ---
 

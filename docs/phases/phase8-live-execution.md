@@ -1,8 +1,8 @@
 # Phase 8 — Live Execution
 
-**Source:** spec.md §16.8, §10 | docs/architecture.md §4.2, §12
 **Status:** ⬜ Not started
-**Prerequisites:** All previous phases complete (paper engine proven, dashboard operational, backtesting validated)
+**Prerequisites:** Phases 3b–7 complete; user explicitly approves live capital
+**Human-readable docs:** [modes.md](../execution/modes.md)
 
 ---
 
@@ -10,30 +10,30 @@
 
 Implement a live `ExecutionAdapter` that places real CLOB orders on Polymarket. The engine code doesn't change at all — this is the payoff of the adapter pattern. Flip `execution.mode: live` and real trades execute through the same FSM, entry/exit rules, and net mirroring logic that paper mode used.
 
-## Spec references
+---
 
-- spec §10 — Execution modes (observe/paper/live, shared engine, swappable adapter)
-- spec §16.8 — Live execution deliverable
-- spec §8.4 — Slippage guard (live only, `exit.max_slippage_pct`)
-- spec §15 — Tech stack (CLOB signing, exchange connectivity)
-- arch §4.2 — ExecutionAdapter abstract interface
-- arch §13 — Architectural invariant: "All external calls go through adapters"
+## Behavioral specification
 
-## Prerequisites
+### Live execution
 
-- Phase 3b complete: paper engine proven with profitable backtests
-- Phase 5 complete: dashboard operational (need to monitor live trades)
-- Phase 6 complete: backtesting validates the strategy
-- Paper PnL is positive across multiple sessions
-- User has a funded Polymarket wallet with API credentials
+- Same engine, FSM, entry/exit rules, and net mirroring as paper mode.
+- Flip `execution.mode: live` — only the `ExecutionAdapter` changes.
+- `exit.maxSlippagePct` applies in live mode only.
+- Real CLOB order signing via Polymarket API credentials.
 
-## Gate condition
+### Gate conditions
 
-**This is the riskiest phase.** Only proceed when:
-1. Paper trading has been running for a meaningful period with positive PnL
-2. Backtesting confirms the strategy across multiple config variants
-3. The false-positive labeling (Phase 5) has been used to refine alert quality
-4. The user explicitly approves moving to live capital
+1. Paper trading positive PnL over meaningful period
+2. Backtesting confirms strategy across config variants
+3. False-positive labeling used to refine alert quality
+4. **User explicitly approves** moving to live capital
+
+---
+
+## Implementation prerequisites
+
+- Phase 3b paper engine proven; Phase 5 dashboard; Phase 6 backtesting
+- Funded Polymarket wallet + API credentials
 
 ## Modules to build
 

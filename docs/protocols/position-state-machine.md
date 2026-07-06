@@ -1,6 +1,7 @@
 # Protocol 2 — Position State Machine (FSM)
 
-**Source:** spec.md §6 | docs/architecture.md §5
+**Source:** spec-full.md §6 | docs/architecture.md §5
+**Implementation:** [phase3a-fsm-and-net.md](../phases/phase3a-fsm-and-net.md)
 
 ---
 
