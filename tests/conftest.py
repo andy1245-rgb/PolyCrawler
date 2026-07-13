@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+import poly_crawler.db.models  # noqa: F401 — register models on Base.metadata
 from poly_crawler.db.base import Base
 
 

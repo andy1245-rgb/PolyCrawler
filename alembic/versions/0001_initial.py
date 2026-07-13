@@ -96,7 +96,12 @@ def upgrade() -> None:
         sa.Column("mirrored_yes", BIGINT(), default=0, nullable=False),
         sa.Column("mirrored_no", BIGINT(), default=0, nullable=False),
         sa.Column("sibling_balances", JSONB, default=dict, nullable=False),
-        sa.Column("tp_sl_suspended", sa.Boolean(), default=False, nullable=False),
+        sa.Column(
+            "tp_sl_mirror_suspended_until_flat",
+            sa.Boolean(),
+            default=False,
+            nullable=False,
+        ),
         sa.Column("last_closed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_closed_reason", sa.String(40), nullable=True),
         sa.Column("config_snapshot_id", UUID(as_uuid=True), sa.ForeignKey("config_snapshots.id"), nullable=True),

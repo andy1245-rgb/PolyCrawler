@@ -1,6 +1,6 @@
 # Alerts
 
-**Source:** spec-full.md §11
+**Source:** [phase5-dashboard-api.md](../phases/phase5-dashboard-api.md)
 **Implementation:** [phase5-dashboard-api.md](../phases/phase5-dashboard-api.md)
 
 ---

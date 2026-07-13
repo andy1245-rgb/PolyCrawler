@@ -1,6 +1,6 @@
 # Data Retention
 
-**Source:** spec-full.md §18
+**Source:** [phase4-reconciliation.md](../phases/phase4-reconciliation.md)
 
 ---
 

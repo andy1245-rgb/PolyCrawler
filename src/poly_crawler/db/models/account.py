@@ -3,8 +3,9 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import DateTime, ForeignKey, String
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from poly_crawler.db.types import JsonType
 
 from ..base import Base, TimestampMixin, UUIDMixin
 
@@ -31,7 +32,7 @@ class Account(UUIDMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     metadata_: Mapped[dict[str, Any]] = mapped_column(
-        "metadata", JSONB, default=dict, nullable=False
+        "metadata", JsonType, default=dict, nullable=False
     )
 
     parent = relationship("Parent", back_populates="accounts")

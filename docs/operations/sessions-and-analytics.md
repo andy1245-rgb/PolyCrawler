@@ -1,6 +1,6 @@
 # Sessions & Analytics
 
-**Source:** spec-full.md §12
+**Source:** [phase3b-paper-execution.md](../phases/phase3b-paper-execution.md), [phase5-dashboard-api.md](../phases/phase5-dashboard-api.md)
 
 ---
 

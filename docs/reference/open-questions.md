@@ -1,6 +1,6 @@
 # Open Questions & Resolutions
 
-**Source:** spec-full.md §20
+**Source:** Phase docs open-decisions tables; historical Q&A
 
 ---
 

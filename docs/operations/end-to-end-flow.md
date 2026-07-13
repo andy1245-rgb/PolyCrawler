@@ -1,6 +1,6 @@
 # End-to-End Flow
 
-**Source:** spec-full.md §13
+**Source:** [phases/_index.md](../phases/_index.md) critical path
 
 ---
 

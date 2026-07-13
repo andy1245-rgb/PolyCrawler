@@ -1,9 +1,18 @@
+"""CLI seed command — Phase 1."""
+
+from __future__ import annotations
+
 import asyncio
+from pathlib import Path
 from typing import Optional
 
 import typer
 
-app = typer.Typer()
+from poly_crawler.config.loader import load_config
+from poly_crawler.db.engine import close_engine, get_session_factory, init_engine
+from poly_crawler.db.repositories import parent_repo as repo
+
+app = typer.Typer(add_completion=False)
 
 
 @app.command()
@@ -29,8 +38,70 @@ async def _seed(
     list_parents: bool,
     ignore: Optional[str],
 ) -> None:
-    # Phase 1: Seed parent wallets + create cluster rows.
-    typer.echo("Seed command not implemented yet (Phase 1).")
+    config = load_config()
+    init_engine(config)
+    try:
+        session_factory = get_session_factory()
+        async with session_factory() as session:
+            if list_parents:
+                rows = await repo.list_parents(session, include_ignored=True)
+                if not rows:
+                    typer.echo("No parents seeded.")
+                    return
+                for row in rows:
+                    score = row.cluster.cluster_score if row.cluster else 0.0
+                    ignored = " [ignored]" if row.is_ignored else ""
+                    typer.echo(f"{row.chain_address}  score={score}{ignored}")
+                return
+
+            if ignore:
+                try:
+                    parent_row = await repo.ignore_parent(session, ignore)
+                except repo.InvalidAddressError as exc:
+                    typer.echo(f"Error: {exc}", err=True)
+                    raise typer.Exit(code=1) from exc
+                except LookupError as exc:
+                    typer.echo(f"Error: {exc}", err=True)
+                    raise typer.Exit(code=1) from exc
+                typer.echo(f"Ignored {parent_row.chain_address}")
+                return
+
+            addresses = list(parents or [])
+            if from_file:
+                path = Path(from_file)
+                if not path.exists():
+                    typer.echo(f"Error: file not found: {from_file}", err=True)
+                    raise typer.Exit(code=1)
+                for line in path.read_text().splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        addresses.append(line)
+
+            if not addresses:
+                typer.echo(
+                    "Error: provide --parent, --from-file, --list, or --ignore",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+
+            created_count = 0
+            skipped_count = 0
+            for address in addresses:
+                try:
+                    _parent, created = await repo.seed_parent(session, address)
+                except repo.InvalidAddressError as exc:
+                    typer.echo(f"Error: {exc}", err=True)
+                    raise typer.Exit(code=1) from exc
+                if created:
+                    created_count += 1
+                    typer.echo(f"Seeded {_parent.chain_address}")
+                else:
+                    skipped_count += 1
+                    typer.echo(f"Skipped duplicate {_parent.chain_address}")
+
+            typer.echo(f"Done. created={created_count} skipped={skipped_count}")
+    finally:
+        await close_engine()
 
 
 @app.command()

@@ -1,6 +1,6 @@
 # Protocol 1 — New-Account Detection
 
-**Source:** spec-full.md §5
+**Source:** [phase2-parent-watcher.md](../phases/phase2-parent-watcher.md)
 **Implementation:** [phase2-parent-watcher.md](../phases/phase2-parent-watcher.md)
 
 ---
