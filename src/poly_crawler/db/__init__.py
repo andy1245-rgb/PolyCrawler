@@ -1,5 +1,5 @@
 from .base import Base, TimestampMixin, UUIDMixin
-from .engine import close_engine, get_session, get_session_factory, init_engine
+from .engine import close_engine, get_session, init_engine
 
 __all__ = [
     "Base",
@@ -7,6 +7,5 @@ __all__ = [
     "UUIDMixin",
     "close_engine",
     "get_session",
-    "get_session_factory",
     "init_engine",
 ]

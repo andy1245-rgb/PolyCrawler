@@ -1,6 +1,6 @@
 # Purpose
 
-**Source:** [spec.md](../../spec.md) | product goals
+**Source:** spec-full.md §1
 
 ---
 

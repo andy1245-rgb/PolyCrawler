@@ -2,6 +2,7 @@
 
 **Development specs:** each phase doc below is self-contained (behavior + implementation).
 **Human onboarding:** [docs/_index.md](../_index.md) — glossary, protocols, operations.
+**Full archive:** [spec-full.md](../reference/spec-full.md)
 
 ---
 
@@ -10,7 +11,7 @@
 | Phase | Name | Status | Key deliverable |
 |-------|------|--------|-----------------|
 | [0](phase0-bootstrap.md) | Bootstrap | ✅ Complete | Repo skeleton, config, DB models, Alembic, FastAPI, test infra |
-| [1](phase1-manual-seed.md) | Manual seed | ✅ Complete | CLI to seed parent wallets + create cluster rows |
+| [1](phase1-manual-seed.md) | Manual seed | ⬜ Not started | CLI to seed parent wallets + create cluster rows |
 | [2](phase2-parent-watcher.md) | Parent watcher + scoring | ⬜ Not started | IngestionAdapter, polling, event detection, scheduler, scorer |
 | [3a](phase3a-fsm-and-net.md) | FSM + net calculator | ⬜ Not started | Position FSM, net calc, processor orchestration |
 | [3a](phase3a-trading-rules.md) | Trading rules | ⬜ Not started | Entry, exit, hedge filter, re-entry, review gates |

@@ -1,6 +1,6 @@
 # Implementation Phases
 
-**Source:** [phases/_index.md](../phases/_index.md)
+**Source:** [spec-full.md](spec-full.md) §16 | [phases/_index.md](../phases/_index.md)
 
 ---
 

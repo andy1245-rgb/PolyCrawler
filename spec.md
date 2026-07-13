@@ -1,6 +1,6 @@
 # PolyCrawler — Spec Index (v0.1.5)
 
-> **Development entry point.** Each implementation phase has a self-contained spec in [docs/phases/](docs/phases/_index.md). Domain concepts live under [docs/_index.md](docs/_index.md).
+> **Development entry point.** Each implementation phase has a self-contained spec in [docs/phases/](docs/phases/_index.md). The full archived specification lives in [docs/reference/spec-full.md](docs/reference/spec-full.md).
 
 ---
 
@@ -8,7 +8,7 @@
 
 When money from a parent wallet we already care about lands in a new Polymarket account, watch the cluster; when the cluster has net exposure in a market, mirror it (paper or live); when cluster net goes flat, hedged, or resolved, exit; log everything for accuracy testing before risking capital.
 
-**Status:** Phase 0–1 complete. Next: [Phase 2 — Parent watcher](docs/phases/phase2-parent-watcher.md).
+**Status:** Phase 0 (bootstrap) complete. Next: [Phase 1 — Manual seed](docs/phases/phase1-manual-seed.md).
 
 ---
 
@@ -18,6 +18,7 @@ When money from a parent wallet we already care about lands in a new Polymarket 
 |-----------|--------|
 | **Implement the next phase** | [docs/phases/_index.md](docs/phases/_index.md) → open that phase doc |
 | **Understand a concept** (glossary, protocols, alerts) | [docs/_index.md](docs/_index.md) — human-readable domain docs |
+| **Full behavioral spec in one file** | [docs/reference/spec-full.md](docs/reference/spec-full.md) |
 | **Architecture & interfaces** | [docs/architecture.md](docs/architecture.md) |
 | **Config keys, DB schema, API routes** | [docs/reference/](docs/reference/configuration.md) |
 
@@ -28,7 +29,7 @@ When money from a parent wallet we already care about lands in a new Polymarket 
 | Phase | Doc | Status | Deliverable |
 |-------|-----|--------|-------------|
 | 0 | [phase0-bootstrap.md](docs/phases/phase0-bootstrap.md) | ✅ Complete | Repo skeleton, config, DB, tests |
-| 1 | [phase1-manual-seed.md](docs/phases/phase1-manual-seed.md) | ✅ Complete | CLI to seed parent wallets |
+| 1 | [phase1-manual-seed.md](docs/phases/phase1-manual-seed.md) | ⬜ Not started | CLI to seed parent wallets |
 | 2 | [phase2-parent-watcher.md](docs/phases/phase2-parent-watcher.md) | ⬜ Not started | FUND/BIRTH ingestion + scoring |
 | 3a | [phase3a-fsm-and-net.md](docs/phases/phase3a-fsm-and-net.md) | ⬜ Not started | Position FSM, net calculator, processor |
 | 3a | [phase3a-trading-rules.md](docs/phases/phase3a-trading-rules.md) | ⬜ Not started | Entry, exit, hedge, re-entry, review |
@@ -48,7 +49,7 @@ When money from a parent wallet we already care about lands in a new Polymarket 
 Every phase doc follows the same layout:
 
 1. **Goal** — what this phase achieves
-2. **Behavioral specification** — rules needed to implement (self-contained in the phase doc)
+2. **Behavioral specification** — rules needed to implement (no need to open spec-full.md)
 3. **Implementation** — modules, data flow, config/DB changes
 4. **Test plan & acceptance criteria** — how to verify done
 5. **Human-readable docs** — links to domain docs for onboarding
@@ -61,7 +62,7 @@ See [docs/architecture/document-history.md](docs/architecture/document-history.m
 
 | Version | Changes |
 |---------|---------|
-| v0.1.5 | Spec split into phase docs; archive deleted after migration; §6.2 formatting fixed |
+| v0.1.5 | Spec split into phase docs; spec-full.md archived; §6.2 formatting fixed |
 | v0.1.5 | `CLOSED` clarified; `tp_sl_mirror_suspended_until_flat` rename |
 | v0.1.4 | Full cluster×market state machine; hedge modes |
 | v0.1.0 | Initial protocols and bootstrap |

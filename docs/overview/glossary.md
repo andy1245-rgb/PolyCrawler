@@ -1,6 +1,6 @@
 # Glossary
 
-**Source:** Domain glossary for onboarding
+**Source:** spec-full.md §2
 
 ---
 

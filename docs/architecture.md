@@ -219,7 +219,7 @@ Indexes: `(parent_id)`, `(watch_status) WHERE watch_status = 'active'`
 | mirrored_yes | BIGINT | DEFAULT 0 | Our current Yes shares |
 | mirrored_no | BIGINT | DEFAULT 0 | Our current No shares |
 | sibling_balances | JSONB | default '{}' | {accountId: {yes, no}} |
-| tp_sl_mirror_suspended_until_flat | BOOLEAN | NOT NULL, DEFAULT FALSE | Until net ~0 |
+| tp_sl_suspended | BOOLEAN | NOT NULL, DEFAULT FALSE | Until net ~0 |
 | last_closed_at | TIMESTAMPTZ | nullable | |
 | last_closed_reason | VARCHAR(40) | nullable | cluster_hedged, tp_hit, sl_hit, resolved, reconciled |
 | config_snapshot_id | UUID | FK → config_snapshots.id | Entry config at time of entry |
@@ -613,7 +613,7 @@ class TaskManager:
 3. ExecutionAdapter: close position (sell 200 Yes)
 4. PaperTrade: exit, reason=cluster_hedged
 5. cluster_position → CLOSED → immediately → WATCHING
-6. last_closed_at set. tp_sl_mirror_suspended_until_flat NOT set (reason ≠ tp/sl)
+6. last_closed_at set. tp_sl_suspended NOT set (reason ≠ tp/sl)
 7. Alert: type=exit
 ```
 

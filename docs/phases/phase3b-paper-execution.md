@@ -266,7 +266,7 @@ After entry, the scheduler runs `fast_poll_for(cluster_position_id)`:
 4. event_logger.log_paper_trade(event_type="exit", reason="cluster_hedged")
 5. Update cluster_position: mirrored_yes=0, state="closed" → "watching"
 6. Set last_closed_at, last_closed_reason="cluster_hedged"
-7. tp_sl_mirror_suspended_until_flat NOT set (reason ≠ tp/sl)
+7. tp_sl_suspended NOT set (reason ≠ tp/sl)
 ```
 
 ## Config changes

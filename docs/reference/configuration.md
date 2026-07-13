@@ -1,6 +1,6 @@
 # Configuration Reference
 
-**Source:** [architecture.md](../architecture.md) §3 | config/schema.py
+**Source:** spec-full.md §14 | docs/architecture.md §3
 
 ---
 

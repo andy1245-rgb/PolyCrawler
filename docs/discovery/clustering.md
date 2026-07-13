@@ -1,6 +1,6 @@
 # Cluster Scoring & Discovery
 
-**Source:** [phase2-parent-watcher.md](../phases/phase2-parent-watcher.md) | [architecture.md](../architecture.md) §9
+**Source:** spec-full.md §4 | docs/architecture.md §9
 **Implementation:** [phase2-parent-watcher.md](../phases/phase2-parent-watcher.md) (scoring), [phase7-auto-discovery.md](../phases/phase7-auto-discovery.md) (auto-flag)
 
 ---

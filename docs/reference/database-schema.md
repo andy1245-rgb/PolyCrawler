@@ -1,6 +1,6 @@
 # Database Schema
 
-**Source:** [architecture.md](../architecture.md) §2 | [phase0-bootstrap.md](../phases/phase0-bootstrap.md)
+**Source:** spec-full.md §19 | docs/architecture.md §2
 
 ---
 
@@ -58,7 +58,7 @@ Relationships: `accounts` (1:N), `cluster` (1:1).
 | mirrored_yes | BIGINT | |
 | mirrored_no | BIGINT | |
 | sibling_balances | JSONB | |
-| tp_sl_mirror_suspended_until_flat | Boolean | Set only on tp_hit/sl_hit; cleared when net ~0 |
+| tp_sl_suspended | Boolean | |
 | last_closed_at | Timestamp | |
 | last_closed_reason | VARCHAR | |
 | config_snapshot_id | UUID FK | |

@@ -1,6 +1,6 @@
 # Phase 1 — Manual Seed
 
-**Status:** ✅ Complete
+**Status:** ⬜ Not started
 **Prerequisites:** [Phase 0](phase0-bootstrap.md) complete
 **Human-readable docs:** [clustering.md](../discovery/clustering.md) (manual seed section), [end-to-end-flow.md](../operations/end-to-end-flow.md)
 
@@ -113,13 +113,13 @@ None — writes to existing `parents` and `clusters` tables only.
 
 ## Acceptance criteria
 
-- [x] `pip install -e ".[dev]"` installs `poly-crawler` CLI
-- [x] `poly-crawler seed --parent 0x…` creates `parents` + `clusters` rows
-- [x] `poly-crawler seed --list` shows seeded parents
-- [x] `poly-crawler seed --ignore 0x…` sets `is_ignored=true`
-- [x] Duplicate addresses do not create duplicates
-- [x] Invalid addresses rejected
-- [x] All tests pass; `ruff` and `mypy` clean
+- [ ] `pip install -e ".[dev]"` installs `poly-crawler` CLI
+- [ ] `poly-crawler seed --parent 0x…` creates `parents` + `clusters` rows
+- [ ] `poly-crawler seed --list` shows seeded parents
+- [ ] `poly-crawler seed --ignore 0x…` sets `is_ignored=true`
+- [ ] Duplicate addresses do not create duplicates
+- [ ] Invalid addresses rejected
+- [ ] All tests pass; `ruff` and `mypy` clean
 
 ---
 
