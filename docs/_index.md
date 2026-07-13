@@ -15,7 +15,7 @@ Documentation has two layers:
 |-----|-------|--------|
 | [_index.md](phases/_index.md) | Master index | — |
 | [phase0-bootstrap.md](phases/phase0-bootstrap.md) | 0 Bootstrap | ✅ |
-| [phase1-manual-seed.md](phases/phase1-manual-seed.md) | 1 Manual seed | ⬜ |
+| [phase1-manual-seed.md](phases/phase1-manual-seed.md) | 1 Manual seed | ✅ |
 | [phase2-parent-watcher.md](phases/phase2-parent-watcher.md) | 2 Parent watcher | ⬜ |
 | [phase3a-fsm-and-net.md](phases/phase3a-fsm-and-net.md) | 3a FSM + net | ⬜ |
 | [phase3a-trading-rules.md](phases/phase3a-trading-rules.md) | 3a Trading rules | ⬜ |

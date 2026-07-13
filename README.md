@@ -2,7 +2,7 @@
 
 Detection and paper-trading pipeline for Polymarket accounts linked by on-chain funding (parent wallets → sibling accounts → early alerts before wins).
 
-**Status:** v0.1.5 — Phase 0 (bootstrap) complete. Next: [Phase 1 — Manual seed](docs/phases/phase1-manual-seed.md).
+**Status:** v0.1.5 — Phase 0–1 complete. Next: [Phase 2 — Parent watcher](docs/phases/phase2-parent-watcher.md).
 
 ## Documentation
 

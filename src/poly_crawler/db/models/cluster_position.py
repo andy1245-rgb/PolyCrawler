@@ -10,11 +10,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Uuid,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as UUIDType  # noqa: N811
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from poly_crawler.db.types import JsonType
 
 from ..base import Base, TimestampMixin, UUIDMixin
 
@@ -29,7 +30,7 @@ class ClusterPosition(UUIDMixin, TimestampMixin, Base):
     market_slug: Mapped[str | None] = mapped_column(String(255), nullable=True)
     market_title: Mapped[str | None] = mapped_column(Text, nullable=True)
     market_tags: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, default=list, nullable=False
+        JsonType, default=list, nullable=False
     )
 
     state: Mapped[str] = mapped_column(
@@ -41,7 +42,7 @@ class ClusterPosition(UUIDMixin, TimestampMixin, Base):
     mirrored_no: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
 
     sibling_balances: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, default=dict, nullable=False
+        JsonType, default=dict, nullable=False
     )
     tp_sl_mirror_suspended_until_flat: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
@@ -52,7 +53,7 @@ class ClusterPosition(UUIDMixin, TimestampMixin, Base):
     )
     last_closed_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
     config_snapshot_id: Mapped[UUID | None] = mapped_column(
-        UUIDType(as_uuid=True),
+        Uuid,
         ForeignKey("config_snapshots.id"),
         nullable=True,
     )

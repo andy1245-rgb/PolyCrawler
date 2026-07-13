@@ -8,7 +8,7 @@
 
 When money from a parent wallet we already care about lands in a new Polymarket account, watch the cluster; when the cluster has net exposure in a market, mirror it (paper or live); when cluster net goes flat, hedged, or resolved, exit; log everything for accuracy testing before risking capital.
 
-**Status:** Phase 0 (bootstrap) complete. Next: [Phase 1 — Manual seed](docs/phases/phase1-manual-seed.md).
+**Status:** Phase 0–1 complete. Next: [Phase 2 — Parent watcher](docs/phases/phase2-parent-watcher.md).
 
 ---
 
@@ -28,7 +28,7 @@ When money from a parent wallet we already care about lands in a new Polymarket 
 | Phase | Doc | Status | Deliverable |
 |-------|-----|--------|-------------|
 | 0 | [phase0-bootstrap.md](docs/phases/phase0-bootstrap.md) | ✅ Complete | Repo skeleton, config, DB, tests |
-| 1 | [phase1-manual-seed.md](docs/phases/phase1-manual-seed.md) | ⬜ Not started | CLI to seed parent wallets |
+| 1 | [phase1-manual-seed.md](docs/phases/phase1-manual-seed.md) | ✅ Complete | CLI to seed parent wallets |
 | 2 | [phase2-parent-watcher.md](docs/phases/phase2-parent-watcher.md) | ⬜ Not started | FUND/BIRTH ingestion + scoring |
 | 3a | [phase3a-fsm-and-net.md](docs/phases/phase3a-fsm-and-net.md) | ⬜ Not started | Position FSM, net calculator, processor |
 | 3a | [phase3a-trading-rules.md](docs/phases/phase3a-trading-rules.md) | ⬜ Not started | Entry, exit, hedge, re-entry, review |
