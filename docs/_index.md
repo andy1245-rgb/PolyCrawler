@@ -5,7 +5,6 @@ Documentation has two layers:
 1. **Implementation phases** ([phases/_index.md](phases/_index.md)) — self-contained specs for building each phase. **Use these when coding.**
 2. **Domain docs** (below) — human-readable reference for understanding concepts. **Use these when onboarding.**
 
-**Archived full spec:** [reference/spec-full.md](reference/spec-full.md)  
 **Spec index (repo root):** [../spec.md](../spec.md)
 
 ---
@@ -72,7 +71,6 @@ Documentation has two layers:
 
 | File | Covers |
 |------|--------|
-| [spec-full.md](reference/spec-full.md) | Archived complete specification |
 | [configuration.md](reference/configuration.md) | All config keys |
 | [database-schema.md](reference/database-schema.md) | All 11 tables |
 | [api-routes.md](reference/api-routes.md) | FastAPI endpoints |
@@ -100,15 +98,14 @@ When behavior changes during a phase:
 
 1. Update the **phase doc** first (source of truth for implementation).
 2. Update the matching **domain doc** if humans need the concept explained.
-3. If the change affects the full spec narrative, update [spec-full.md](reference/spec-full.md).
 
 ### Doc format
 
 ```markdown
 # Title
 
-**Source:** spec-full.md §N | docs/architecture.md §N
-**Implementation:** [phaseN-….md](phases/phaseN-….md)
+**Source:** [phaseN-….md](phases/phaseN-….md) (behavioral spec)
+**Related:** [architecture.md](architecture.md) §N
 
 ---
 ```
@@ -123,4 +120,4 @@ When behavior changes during a phase:
 2. Domain doc updated if concept changed
 3. Listed in this index
 4. Internal links valid
-5. No references to deleted files (e.g. old `phase3a-engine-core.md`)
+5. No references to deleted files

@@ -1,11 +1,13 @@
 # Protocol 4 — Exit Rules
 
-**Source:** spec-full.md §8 | docs/architecture.md §7
-**Implementation:** [phase3a-trading-rules.md](../phases/phase3a-trading-rules.md), [phase4-reconciliation.md](../phases/phase4-reconciliation.md)
+**Source:** [phase3a-trading-rules.md](../phases/phase3a-trading-rules.md), [phase4-reconciliation.md](../phases/phase4-reconciliation.md)
+**Related:** [architecture.md](../architecture.md) §7
 
 ---
 
 Exits are evaluated on each poll cycle for positions in `IN_POSITION` state.
+
+> **Polling note:** Exit detection uses configurable poll intervals, not real-time websockets. Missed events between polls are corrected by position reconciliation (Phase 4).
 
 ### Exit priority (first match wins)
 
@@ -26,19 +28,26 @@ exit:
   stop_loss_pct: 0.25         # 25% loss
   max_hold_hours: null        # off
   close_on_resolution: true
+  add_on_repeat_buy: false
+  notify_on_repeat_buy: true  # dashboard notice when net unchanged but sibling rebuys
 ```
+
+**Default (v0.1):** hold until cluster net is flat/hedged, siblings redeem, reconciliation catches up, or the market resolves. No TP/SL unless explicitly enabled.
+
+When `entry.followReentryAfterSell` is on, it overrides `exit.addOnRepeatBuy` being false for that re-entry path.
 
 ### TP/SL suspension
 
-When a position closes due to TP or SL, `tp_sl_suspended` is set on the cluster position. The system won't re-enter on the same side until cluster net goes flat first — prevents whipsaw re-entries.
+When a position closes due to TP or SL, set `tp_sl_mirror_suspended_until_flat` on the cluster position. While true: do not re-enter or resume mirroring until cluster net ~0 (then clear flag). Other close reasons (hedge, redeem, resolution) do **not** set this flag.
 
-### Close reasons
+### Close reasons (canonical)
 
-- `net_flat` — cluster net returned to ~0
-- `hedged` — opposing siblings cancelled net
-- `redeemed` — winning shares cashed out after resolution
-- `reconciliation` — balance poll disagreed with event tracking
-- `tp_hit` — take profit target reached
-- `sl_hit` — stop loss triggered
-- `max_hold` — time limit exceeded
-- `resolved` — market resolved
+| Reason | When |
+|--------|------|
+| `cluster_hedged` | Cluster net → ~0 (within `min_net_usd`), including opposing siblings / redeem |
+| `reconciled` | Balance poll corrected net → ~0 after missed events |
+| `tp_hit` | Take profit target reached |
+| `sl_hit` | Stop loss triggered |
+| `max_hold` | Time limit exceeded |
+| `resolved` | Market resolved per Data API |
+| `net_adjustment` | (not a close) — mirror delta while staying `IN_POSITION` |

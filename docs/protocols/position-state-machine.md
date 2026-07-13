@@ -1,7 +1,7 @@
 # Protocol 2 — Position State Machine (FSM)
 
-**Source:** spec-full.md §6 | docs/architecture.md §5
-**Implementation:** [phase3a-fsm-and-net.md](../phases/phase3a-fsm-and-net.md)
+**Source:** [phase3a-fsm-and-net.md](../phases/phase3a-fsm-and-net.md) (behavioral spec)
+**Related:** [architecture.md](../architecture.md) §5
 
 ---
 
@@ -20,10 +20,10 @@ WATCHING ──► SIGNAL ──► IN_POSITION ──► CLOSED ──► WATCH
 
 | State | Meaning |
 |-------|---------|
-| **WATCHING** | No mirrored hold. Net is flat or we're idle. Default starting state. |
+| **WATCHING** | No mirrored hold. Net is flat or we're idle. May still carry `tp_sl_mirror_suspended_until_flat` after a TP/SL exit until net ~0 clears it. Default starting state. |
 | **SIGNAL** | Entry rules passed but review required. Awaiting human approve/reject. |
 | **IN_POSITION** | We have a mirrored position. Net deltas → adjustments. |
-| **CLOSED** | Position closed. PnL recorded. Auto-transitions to WATCHING same tick. |
+| **CLOSED** | **Bookkeeping only — not a resting state.** Exit logged, then **same poll tick** → `WATCHING`. |
 | **SKIPPED** | We chose not to mirror (review rejection or manual skip). |
 
 ### Transitions
@@ -36,6 +36,17 @@ WATCHING ──► SIGNAL ──► IN_POSITION ──► CLOSED ──► WATCH
 - `IN_POSITION` → net delta → stay `IN_POSITION` (adjust position)
 - `CLOSED` → auto → `WATCHING` (same poll tick)
 - `SKIPPED` → net ~0 → `WATCHING`
+
+### Persisted fields (`cluster_positions`)
+
+| Field | Meaning |
+|-------|---------|
+| `sibling_balances` | `accountId → { yesShares, noShares }` |
+| `net_exposure` | sum(Yes) − sum(No) across siblings |
+| `last_known_net` | Previous net for delta mirroring |
+| `mirrored_yes` / `mirrored_no` | Our current hold |
+| `last_closed_at` | For follow re-entry |
+| `tp_sl_mirror_suspended_until_flat` | Set **only** on `tp_hit` / `sl_hit`; cleared when net ~0 |
 
 ### Optional timeouts
 

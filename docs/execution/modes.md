@@ -1,6 +1,6 @@
 # Execution Modes
 
-**Source:** spec-full.md §10
+**Source:** [phase3b-paper-execution.md](../phases/phase3b-paper-execution.md), [phase8-live-execution.md](../phases/phase8-live-execution.md)
 **Implementation:** [phase3b-paper-execution.md](../phases/phase3b-paper-execution.md), [phase8-live-execution.md](../phases/phase8-live-execution.md)
 
 ---

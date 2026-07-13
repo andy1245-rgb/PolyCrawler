@@ -1,6 +1,6 @@
 # Account Types
 
-**Source:** spec-full.md §3
+**Source:** [phase2-parent-watcher.md](../phases/phase2-parent-watcher.md)
 
 ---
 

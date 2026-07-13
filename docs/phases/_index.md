@@ -2,7 +2,6 @@
 
 **Development specs:** each phase doc below is self-contained (behavior + implementation).
 **Human onboarding:** [docs/_index.md](../_index.md) — glossary, protocols, operations.
-**Full archive:** [spec-full.md](../reference/spec-full.md)
 
 ---
 

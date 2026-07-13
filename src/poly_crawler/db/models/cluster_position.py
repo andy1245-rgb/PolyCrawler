@@ -43,7 +43,7 @@ class ClusterPosition(UUIDMixin, TimestampMixin, Base):
     sibling_balances: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, nullable=False
     )
-    tp_sl_suspended: Mapped[bool] = mapped_column(
+    tp_sl_mirror_suspended_until_flat: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
 

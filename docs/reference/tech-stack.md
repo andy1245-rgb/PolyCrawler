@@ -1,6 +1,6 @@
 # Tech Stack
 
-**Source:** spec-full.md §15
+**Source:** [phases/_index.md](../phases/_index.md) (stack choices)
 
 ---
 

@@ -148,7 +148,7 @@ Review required → state stays `SIGNAL` until approved (`IN_POSITION`) or rejec
 @dataclass
 class ExitDecision:
     reason: str  # cluster_hedged, tp_hit, sl_hit, max_hold, resolved
-    set_tp_sl_suspended: bool = False
+    set_tp_sl_mirror_suspended_until_flat: bool = False
 ```
 
 Wire into `PositionFSM` handlers in [phase3a-fsm-and-net.md](phase3a-fsm-and-net.md).
