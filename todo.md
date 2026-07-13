@@ -4,7 +4,7 @@
 > **Purpose:** Capture all discussion topics from the doc-restructure review session. **Do not start implementation until each section is reviewed and agreed.**  
 > **Branch context:** `cursor/todo-discussion-cleanup-fed6` (from `cursor/doc-restructure-phases-1947`) — Phase 0 complete, Phase 1 next.
 >
-> **2026-07-13 session:** Restored this file (was never committed). Decisions locked below. Implementing cleanup → then Phase 1.
+> **2026-07-13 session:** Restored this file (was never committed). Decisions locked below. Cleanup done. **Phase 1 (manual seed) implemented** — next review checkpoint before Phase 2.
 
 ---
 
