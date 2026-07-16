@@ -1,7 +1,11 @@
-from typing import Literal, Optional
+from typing import Literal, Optional, Tuple, Type
 
 from pydantic import BaseModel
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 
 class DiscoveryWeights(BaseModel):
@@ -118,3 +122,20 @@ class Config(BaseSettings):
     alerts: AlertsConfig = AlertsConfig()
     retention: RetentionConfig = RetentionConfig()
     sessions: SessionsConfig = SessionsConfig()
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: Type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> Tuple[PydanticBaseSettingsSource, ...]:
+        """Env vars beat YAML init kwargs so ``POLY_*`` is highest priority."""
+        return (
+            env_settings,
+            dotenv_settings,
+            init_settings,
+            file_secret_settings,
+        )

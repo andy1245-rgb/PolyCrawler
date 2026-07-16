@@ -41,10 +41,11 @@ def init_engine(config: Config, database_url: str | None = None) -> None:
 
 async def close_engine() -> None:
     """Dispose the engine. Called at shutdown."""
-    global _engine
+    global _engine, _session_factory
     if _engine:
         await _engine.dispose()
         _engine = None
+    _session_factory = None
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

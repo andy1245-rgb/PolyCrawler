@@ -12,11 +12,10 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as UUIDType  # noqa: N811
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ..base import Base, TimestampMixin, UUIDMixin
+from ..base import Base, JsonType, TimestampMixin, UUIDMixin
 
 
 class ClusterPosition(UUIDMixin, TimestampMixin, Base):
@@ -28,8 +27,8 @@ class ClusterPosition(UUIDMixin, TimestampMixin, Base):
     market_id: Mapped[str] = mapped_column(String(64), nullable=False)
     market_slug: Mapped[str | None] = mapped_column(String(255), nullable=True)
     market_title: Mapped[str | None] = mapped_column(Text, nullable=True)
-    market_tags: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, default=list, nullable=False
+    market_tags: Mapped[list[Any]] = mapped_column(
+        JsonType, default=list, nullable=False
     )
 
     state: Mapped[str] = mapped_column(
@@ -41,7 +40,7 @@ class ClusterPosition(UUIDMixin, TimestampMixin, Base):
     mirrored_no: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
 
     sibling_balances: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, default=dict, nullable=False
+        JsonType, default=dict, nullable=False
     )
     tp_sl_suspended: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False

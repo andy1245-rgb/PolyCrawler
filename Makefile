@@ -4,7 +4,7 @@
 .PHONY: install lint typecheck test test-cov migrate db-up db-down run dev
 
 SHELL := /bin/bash
-PYTHON := python
+PYTHON := python3
 ALEMBIC := alembic
 
 install:

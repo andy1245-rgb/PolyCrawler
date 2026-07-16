@@ -3,9 +3,21 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import JSON, DateTime, TypeDecorator, func
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+class JsonType(TypeDecorator[object]):
+    """JSONB on PostgreSQL; plain JSON elsewhere (SQLite tests)."""
+
+    impl = JSON
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):  # type: ignore[no-untyped-def]
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(JSONB())
+        return dialect.type_descriptor(JSON())
 
 
 class Base(DeclarativeBase):
