@@ -8,10 +8,11 @@
 database_url: null  # postgresql+asyncpg://user:pass@host:5432/poly_crawler
 rpc_url: null       # https://polygon-mainnet.g.alchemy.com/v2/YOUR_KEY
 
-# When moving to a paid RPC provider, switch to:
+# When the bot is profitable enough to pay for RPC, switch to:
 # rpc:
 #   budget_mode: capped
 #   monthly_request_limit: 3000000
+#   max_requests_per_second: 25
 
 discovery:
   profit_formula: sqrt

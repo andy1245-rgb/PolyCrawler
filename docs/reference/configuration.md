@@ -17,8 +17,9 @@ rpc_url: null       # Polygon JSON-RPC endpoint (public/free in v0.1)
 
 ```yaml
 rpc:
-  budget_mode: unlimited          # unlimited (v0.1 default) | capped (paid provider later)
-  monthly_request_limit: null     # required when budget_mode=capped
+  budget_mode: free_tier          # free_tier (v0.1 default) | capped (paid provider later)
+  max_requests_per_second: 5.0    # soft throttle for free public endpoints
+  monthly_request_limit: null     # set when budget_mode=capped
   log_usage: true                 # write rows to rpc_logs
 ```
 

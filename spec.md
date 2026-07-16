@@ -868,7 +868,7 @@ Core tables: `parents` (`is_ignored`), `accounts` (`watch_status`), `clusters`, 
 |---|----------|--------|
 | 1 | Market tag / Layer D weighting | Deferred |
 | 2 | Sibling opposing-side policy beyond CONFLICT alert | **Resolved** — `net_cluster_position` default (§7.7) |
-| 3 | RPC provider budget | **Resolved (v0.1)** — free/public RPC, no hard budget; log usage (`rpc.budget_mode: unlimited`). Paid + caps later. |
+| 3 | RPC provider budget | **Resolved (v0.1)** — free-tier public RPC + soft RPS limit (`rpc.budget_mode: free_tier`); paid/capped later when profitable. |
 | 4 | Telegram / external alerts | User researching |
 | 5 | Cluster×market state machine | **Resolved** — §6 |
 | 6 | Entry `minBuyUsd` / `maxOdds` on cluster net after poll batch | **Resolved** — §7.1 |

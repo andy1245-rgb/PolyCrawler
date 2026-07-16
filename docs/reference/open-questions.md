@@ -8,7 +8,7 @@
 |---|----------|--------|-------|
 | 1 | Market tag / Layer D weighting | **Deferred** | Keep `entry.market_tags` as allow-list only until a weighting model is chosen. No score impact in v0.1. |
 | 2 | Sibling opposing-side policy beyond CONFLICT alert | **Resolved** | `net_cluster_position` default (§7.7) |
-| 3 | RPC provider budget | **Resolved (v0.1)** | Use free/public Polygon RPC with **no hard budget**; always log usage via `rpc_logs`. Config: `rpc.budget_mode: unlimited`. Paid + `capped` limits are a later upgrade path. |
+| 3 | RPC provider budget | **Resolved (v0.1)** | Stay on **free-tier** public Polygon RPC with a soft rate limit (`rpc.budget_mode: free_tier`, `max_requests_per_second: 5`). Always log usage. Upgrade to paid + `capped` once the bot is profitable. |
 | 4 | Telegram / external alerts | **TBD — needs decision** | `alerts.channels` already accepts `dashboard` / future `telegram` / `discord`. Wire-up blocked on bot token / webhook choice. |
 | 5 | Cluster×market state machine | **Resolved** | §6 |
 | 6 | Entry minBuyUsd / maxOdds on cluster net after poll batch | **Resolved** | §7.1 |

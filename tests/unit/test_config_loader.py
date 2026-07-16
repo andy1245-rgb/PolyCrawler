@@ -17,7 +17,8 @@ def test_load_default_yaml() -> None:
     assert config.discovery.profit_formula == "sqrt"
     assert config.entry.min_buy_usd == 500.0
     assert config.rpc_url is None
-    assert config.rpc.budget_mode == "unlimited"
+    assert config.rpc.budget_mode == "free_tier"
+    assert config.rpc.max_requests_per_second == 5.0
     assert config.rpc.monthly_request_limit is None
     assert config.rpc.log_usage is True
 

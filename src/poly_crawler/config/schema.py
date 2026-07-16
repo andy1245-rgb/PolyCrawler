@@ -99,9 +99,14 @@ class SessionsConfig(BaseModel):
 
 
 class RpcConfig(BaseModel):
-    """RPC usage policy. v0.1 uses unlimited public/free RPC; caps come later."""
+    """RPC usage policy.
 
-    budget_mode: Literal["unlimited", "capped"] = "unlimited"
+    v0.1 stays on free-tier public RPC (soft rate limit). Switch to
+    ``budget_mode=capped`` + ``monthly_request_limit`` when paying for a provider.
+    """
+
+    budget_mode: Literal["free_tier", "capped"] = "free_tier"
+    max_requests_per_second: float = 5.0
     monthly_request_limit: Optional[int] = None
     log_usage: bool = True
 
