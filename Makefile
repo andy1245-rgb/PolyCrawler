@@ -1,7 +1,7 @@
 # PolyCrawler development convenience targets.
 # Requires `make` (GNU Make). On Windows use PowerShell: .\scripts\dev.ps1
 
-.PHONY: install lint typecheck test test-cov migrate db-up db-down run dev
+.PHONY: install lint typecheck test test-cov migrate db-up db-down setup-db run dev
 
 SHELL := /bin/bash
 PYTHON := python3
@@ -30,6 +30,9 @@ db-up:
 
 db-down:
 	$(ALEMBIC) downgrade -1
+
+setup-db:
+	bash scripts/setup_local_db.sh
 
 run:
 	uvicorn poly_crawler.main:app --reload

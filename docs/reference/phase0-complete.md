@@ -282,7 +282,7 @@ to:
 | 9 | `scripts/validate_schema.py` | 23 | Build |
 | 10 | `README.md` | 22 (1 changed) | Docs |
 
-> **Note:** `tests/fixtures/labeled_wallets.json`, `sample_events.json`, and `sample_orderbook.json` were created in Phase 0 alongside the conftest. They'll be expanded (more wallets, more events) as Phases 2–6 are implemented.
+> **Note:** Phase 0 now includes unit tests under `tests/unit/` (config loader, models, health, fixtures) plus optional Postgres integration checks in `tests/integration/`. Fixture JSON files will expand as Phases 2–6 land.
 
 ---
 

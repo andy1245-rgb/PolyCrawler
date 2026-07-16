@@ -8,6 +8,17 @@ Detection and paper-trading pipeline for Polymarket accounts linked by on-chain 
 
 See [spec.md](./spec.md) for product behavior, protocols, configuration defaults, and implementation phases.
 
+## Quick start (local)
+
+```bash
+pip install -e ".[dev]"
+cp .env.example .env
+# Start Postgres, then:
+make setup-db    # create DB + alembic upgrade + schema check
+make test
+make run         # http://localhost:8000/health
+```
+
 ## Summary
 
 1. Trace **parent** funding wallets behind Polymarket accounts.

@@ -61,7 +61,7 @@ For full Phase 0 detail, see [phase0-complete.md](../reference/phase0-complete.m
 | ~~No CLI entry point~~ | ✅ Fixed — `poly-crawler = "poly_crawler.cli:app"` in `[project.scripts]`; `cli.py` provides `seed` + `run` subcommands |
 | ~~Missing config keys~~ | ✅ Fixed — `max_slippage_pct`, `add_on_repeat_buy`, `notify_on_repeat_buy`, `tp_sl_suspend_mirror_until_flat` added to `ExitConfig` + `default.yaml` |
 | ~~No RPC provider config~~ | ✅ Fixed — `rpc_url` added to config schema + `default.yaml` + `production.yaml` |
-| Zero test functions | conftest + fixtures exist but no actual `test_*.py` files; written in Phase 1+ |
+| ~~Zero test functions~~ | ✅ Fixed — Phase 0 unit tests in `tests/unit/` (config loader, models, health, fixtures) |
 
 ## Acceptance criteria (all met)
 

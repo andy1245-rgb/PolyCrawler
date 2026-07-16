@@ -23,7 +23,8 @@ def init_engine(config: Config, database_url: str | None = None) -> None:
     1. Explicit *database_url* argument
     2. ``config.database_url`` (set via ``POLY_DATABASE_URL`` env or YAML)
     3. ``DATABASE_URL`` environment variable
-    4. ``postgresql+asyncpg://localhost:5432/poly_crawler`` (default)
+    4. ``postgresql+asyncpg://polycrawler:polycrawler@localhost:5432/poly_crawler``
+       (local-dev default; override in production)
     """
     global _engine, _session_factory
 
@@ -31,7 +32,7 @@ def init_engine(config: Config, database_url: str | None = None) -> None:
         database_url
         or config.database_url
         or os.environ.get("DATABASE_URL")
-        or "postgresql+asyncpg://localhost:5432/poly_crawler"
+        or "postgresql+asyncpg://polycrawler:polycrawler@localhost:5432/poly_crawler"
     )
     _engine = create_async_engine(db_url, pool_size=5, max_overflow=10)
     _session_factory = async_sessionmaker(
