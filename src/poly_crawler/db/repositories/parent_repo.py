@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from eth_utils import is_address, to_checksum_address
+from eth_utils import is_address, to_checksum_address  # type: ignore[attr-defined]
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

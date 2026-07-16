@@ -1,7 +1,7 @@
 # Phase 1 — Manual Seed
 
 **Source:** spec.md §16.1 | docs/architecture.md §12
-**Status:** ⬜ Not started
+**Status:** ✅ Complete
 **Prerequisites:** [Phase 0](phase0-bootstrap.md) complete
 
 ---
@@ -143,19 +143,19 @@ None. All tables already exist from the Phase 0 migration. This phase only write
 
 ## Acceptance criteria
 
-- [ ] `pip install -e ".[dev]"` installs `poly-crawler` CLI command
-- [ ] `poly-crawler seed --parent 0xABC...` creates a `parents` row + `clusters` row
-- [ ] `poly-crawler seed --list` shows seeded parents
-- [ ] `poly-crawler seed --ignore 0xABC...` sets `is_ignored: true`
-- [ ] Seeding the same address twice doesn't create duplicates
-- [ ] All unit tests pass
-- [ ] All integration tests pass
-- [ ] `ruff check` and `mypy` pass clean
+- [x] `pip install -e ".[dev]"` installs `poly-crawler` CLI command
+- [x] `poly-crawler seed --parent 0xABC...` creates a `parents` row + `clusters` row
+- [x] `poly-crawler seed --list` shows seeded parents
+- [x] `poly-crawler seed --ignore 0xABC...` sets `is_ignored: true`
+- [x] Seeding the same address twice doesn't create duplicates
+- [x] All unit tests pass
+- [x] All integration tests pass
+- [x] `ruff check` and `mypy` pass clean
 
 ## Open decisions
 
 | # | Question | Notes |
 |---|----------|-------|
-| 1 | Click vs Typer for CLI | Typer recommended — async-friendly, type hints, FastAPI ecosystem alignment |
-| 2 | Should seed also fetch initial sibling accounts from chain? | No — that's Phase 2's job (parent watcher). Phase 1 is manual seed only. |
-| 3 | Should we validate address checksums? | Yes — reject invalid Ethereum addresses (not 42 chars, bad checksum). Use `eth-account` for validation. |
+| 1 | Click vs Typer for CLI | **Resolved** — Typer |
+| 2 | Should seed also fetch initial sibling accounts from chain? | **Resolved** — No; Phase 2 |
+| 3 | Should we validate address checksums? | **Resolved** — Yes via `eth_utils` (`is_address` + checksum store) |

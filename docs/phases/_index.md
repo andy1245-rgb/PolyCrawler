@@ -4,7 +4,7 @@
 
 ---
 
-The project is built in 9 phases (0–8). Phase 0 is complete. Each phase below has a dedicated doc with full detail: goals, modules, interfaces, data flows, config changes, DB changes, test plans, and acceptance criteria.
+The project is built in 9 phases (0–8). Phases 0–1 are complete. Each phase below has a dedicated doc with full detail: goals, modules, interfaces, data flows, config changes, DB changes, test plans, and acceptance criteria.
 
 ---
 
@@ -13,7 +13,7 @@ The project is built in 9 phases (0–8). Phase 0 is complete. Each phase below 
 | Phase | Name | Status | Spec § | Key deliverable |
 |-------|------|--------|--------|-----------------|
 | [0](phase0-bootstrap.md) | Bootstrap | ✅ Complete | — | Repo skeleton, config, DB models, Alembic, FastAPI entry, test infra |
-| [1](phase1-manual-seed.md) | Manual seed | ⬜ Not started | §16.1 | CLI to seed parent wallets + create cluster rows |
+| [1](phase1-manual-seed.md) | Manual seed | ✅ Complete | §16.1 | CLI to seed parent wallets + create cluster rows |
 | [2](phase2-parent-watcher.md) | Parent watcher + scoring | ⬜ Not started | §16.2, §4 | IngestionAdapter, polling, event detection, scheduler, basic scorer |
 | [3a](phase3a-engine-core.md) | Engine core | ⬜ Not started | §16.3 (pt 1) | FSM, net calc, entry/exit rules, hedge filter, reentry, processor |
 | [3b](phase3b-paper-execution.md) | Paper execution | ⬜ Not started | §16.3 (pt 2) | ExecutionAdapter, orderbook walk, session manager, event logger |
@@ -34,7 +34,7 @@ The project is built in 9 phases (0–8). Phase 0 is complete. Each phase below 
                     └────┬─────┘
                          │
                     ┌────▼─────┐
-                    │ Phase 1  │
+                    │ Phase 1  │ ✅ DONE
                     │Seed (CLI)│
                     └────┬─────┘
                          │

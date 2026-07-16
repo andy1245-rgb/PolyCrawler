@@ -2,7 +2,7 @@
 
 Detection and paper-trading pipeline for Polymarket accounts linked by on-chain funding (parent wallets → sibling accounts → early alerts before wins).
 
-**Status:** v0.1.5 — Phase 0 (bootstrap) complete. Config schema, DB models, Alembic migrations, test infrastructure, and app entry point are in place. Moving to Phase 1 (discovery engine).
+**Status:** v0.1.5 — Phase 0–1 complete. Manual seed CLI is live; next is Phase 2 (parent watcher + scoring).
 
 ## Spec
 
@@ -16,6 +16,8 @@ cp .env.example .env
 # Start Postgres, then:
 make setup-db    # create DB + alembic upgrade + schema check
 make test
+poly-crawler seed --parent 0xABC...   # Phase 1 manual seed
+poly-crawler seed --list
 make run         # http://localhost:8000/health
 ```
 
