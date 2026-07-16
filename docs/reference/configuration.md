@@ -10,6 +10,16 @@ Full configuration schema with defaults. All keys can be overridden via environm
 
 ```yaml
 database_url: null  # postgresql+asyncpg://... ; falls back to DATABASE_URL env, then localhost default
+rpc_url: null       # Polygon JSON-RPC endpoint (public/free in v0.1)
+```
+
+## RPC usage policy
+
+```yaml
+rpc:
+  budget_mode: unlimited          # unlimited (v0.1 default) | capped (paid provider later)
+  monthly_request_limit: null     # required when budget_mode=capped
+  log_usage: true                 # write rows to rpc_logs
 ```
 
 ## Discovery

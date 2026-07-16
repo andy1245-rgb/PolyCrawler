@@ -98,6 +98,14 @@ class SessionsConfig(BaseModel):
     private_default: bool = False
 
 
+class RpcConfig(BaseModel):
+    """RPC usage policy. v0.1 uses unlimited public/free RPC; caps come later."""
+
+    budget_mode: Literal["unlimited", "capped"] = "unlimited"
+    monthly_request_limit: Optional[int] = None
+    log_usage: bool = True
+
+
 class Config(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="POLY_",
@@ -122,6 +130,7 @@ class Config(BaseSettings):
     alerts: AlertsConfig = AlertsConfig()
     retention: RetentionConfig = RetentionConfig()
     sessions: SessionsConfig = SessionsConfig()
+    rpc: RpcConfig = RpcConfig()
 
     @classmethod
     def settings_customise_sources(

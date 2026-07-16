@@ -8,7 +8,7 @@
 |---|----------|--------|-------|
 | 1 | Market tag / Layer D weighting | **Deferred** | Keep `entry.market_tags` as allow-list only until a weighting model is chosen. No score impact in v0.1. |
 | 2 | Sibling opposing-side policy beyond CONFLICT alert | **Resolved** | `net_cluster_position` default (§7.7) |
-| 3 | RPC provider budget | **TBD — needs decision** | Config has `rpc_url` + `rpc_logs` table. Still need monthly CU/request budget and throttle policy before Phase 2 polling. |
+| 3 | RPC provider budget | **Resolved (v0.1)** | Use free/public Polygon RPC with **no hard budget**; always log usage via `rpc_logs`. Config: `rpc.budget_mode: unlimited`. Paid + `capped` limits are a later upgrade path. |
 | 4 | Telegram / external alerts | **TBD — needs decision** | `alerts.channels` already accepts `dashboard` / future `telegram` / `discord`. Wire-up blocked on bot token / webhook choice. |
 | 5 | Cluster×market state machine | **Resolved** | §6 |
 | 6 | Entry minBuyUsd / maxOdds on cluster net after poll batch | **Resolved** | §7.1 |
@@ -18,6 +18,6 @@
 
 ## What is blocked
 
-- **#3 RPC budget** blocks safe Phase 2 parent-watcher polling (rate limits / cost).
 - **#4 Telegram** does **not** block Phase 1–3b; dashboard channel is enough for paper trading.
 - **#1 Tag weighting** does **not** block v0.1; allow-list filter is sufficient.
+- **#3 RPC budget** no longer blocks Phase 2 — proceed with public RPC + usage logs; revisit caps when moving to a paid provider.

@@ -2,7 +2,12 @@
 # Override via environment variables (POLY_*_*) or a production.yaml file.
 
 database_url: null  # postgresql+asyncpg://... ; defaults to localhost
-rpc_url: null       # Polygon RPC endpoint (Alchemy, QuickNode, etc.)
+rpc_url: null       # Polygon RPC endpoint (public/free for now; Alchemy/QuickNode later)
+
+rpc:
+  budget_mode: unlimited          # unlimited (v0.1) | capped (paid provider later)
+  monthly_request_limit: null     # set when budget_mode=capped
+  log_usage: true                 # always write rpc_logs rows
 
 discovery:
   min_sibling_count: 2

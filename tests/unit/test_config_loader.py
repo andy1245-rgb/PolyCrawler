@@ -17,6 +17,9 @@ def test_load_default_yaml() -> None:
     assert config.discovery.profit_formula == "sqrt"
     assert config.entry.min_buy_usd == 500.0
     assert config.rpc_url is None
+    assert config.rpc.budget_mode == "unlimited"
+    assert config.rpc.monthly_request_limit is None
+    assert config.rpc.log_usage is True
 
 
 def test_deep_merge_preserves_nested_defaults(tmp_path: Path) -> None:
