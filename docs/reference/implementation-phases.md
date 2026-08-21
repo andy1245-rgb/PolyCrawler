@@ -4,7 +4,7 @@
 
 ---
 
-The project is built in 9 phases (0–8). Each phase has a dedicated doc in `docs/phases/` with full detail: goals, modules, interfaces, data flows, config changes, DB changes, test plans, and acceptance criteria.
+The project is built in 9 phases (0–8). Phases 0–1 are complete; Phase 2 is the next implementation target. Each phase has a dedicated doc in `docs/phases/` with full detail: goals, modules, interfaces, data flows, config changes, DB changes, test plans, and acceptance criteria.
 
 **Full phase documentation:** [docs/phases/_index.md](../phases/_index.md)
 
@@ -15,7 +15,7 @@ The project is built in 9 phases (0–8). Each phase has a dedicated doc in `doc
 | Phase | Name | Status | Detailed doc |
 |-------|------|--------|--------------|
 | 0 | Bootstrap | ✅ Complete | [phase0-bootstrap.md](../phases/phase0-bootstrap.md) |
-| 1 | Manual seed | ⬜ Not started | [phase1-manual-seed.md](../phases/phase1-manual-seed.md) |
+| 1 | Manual seed | ✅ Complete | [phase1-manual-seed.md](../phases/phase1-manual-seed.md) |
 | 2 | Parent watcher + scoring | ⬜ Not started | [phase2-parent-watcher.md](../phases/phase2-parent-watcher.md) |
 | 3a | Engine core | ⬜ Not started | [phase3a-engine-core.md](../phases/phase3a-engine-core.md) |
 | 3b | Paper execution | ⬜ Not started | [phase3b-paper-execution.md](../phases/phase3b-paper-execution.md) |

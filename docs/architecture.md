@@ -765,7 +765,7 @@ The project is built in 9 phases (0–8). Each phase has a dedicated doc in `doc
 | Phase | Name | Status | Deliverable | Key modules |
 |-------|------|--------|-------------|-------------|
 | [0](phases/phase0-bootstrap.md) | Bootstrap | ✅ Complete | pyproject.toml, package skeleton, config loading, alembic setup, test harness | config/, db/, tests/conftest.py |
-| [1](phases/phase1-manual-seed.md) | Manual seed | ⬜ | CLI to seed parent wallets + create cluster rows | cli.py, db/repositories/ |
+| [1](phases/phase1-manual-seed.md) | Manual seed | ✅ Complete | CLI to seed parent wallets + create cluster rows | cli.py, db/repositories/ |
 | [2](phases/phase2-parent-watcher.md) | Parent watcher + scoring | ⬜ | IngestionAdapter, polling, event detection, scheduler, scorer | ingestion/, clustering/, scheduler/ |
 | [3a](phases/phase3a-engine-core.md) | Engine core | ⬜ | FSM, net calc, entry/exit rules, hedge filter, reentry, processor | engine/ |
 | [3b](phases/phase3b-paper-execution.md) | Paper execution | ⬜ | ExecutionAdapter, orderbook walk, session manager, event logger | execution/paper/, analytics/ |

@@ -336,8 +336,9 @@ None. All tables exist. This phase writes to: `accounts`, `alerts`, `clusters` (
 
 | # | Question | Notes |
 |---|----------|-------|
-| 1 | RPC provider (open question #3) | Must decide: Alchemy vs QuickNode vs free Polygon RPC. Affects rate limits and cost. |
-| 2 | Multicall implementation | Use `web3.py` multicall library or roll our own batch? Multicall3 contract on Polygon. |
-| 3 | Event detection granularity | Poll by block range or by transaction? Block range is simpler but may miss events in reorgs. |
-| 4 | Should scorer fetch profit data from Data API or chain? | Data API has `cashPnl` but spec says use realized PnL via cashflow reconstruction. Need to decide reconstruction approach. |
-| 5 | Scheduler: asyncio loops vs APScheduler | asyncio loops recommended for v0.1 (simpler, fewer deps). APScheduler already in deps but adds complexity. |
+| 1 | RPC provider / budget | **Agreed direction:** free-tier public Polygon RPC with a soft limit; upgrade to paid once the bot is profitable. Exact provider remains open. |
+| 2 | Multicall implementation | **Agreed direction:** thin DIY Multicall3 wrapper inside `RpcClient`; callers must not access `web3` or Multicall3 directly. |
+| 3 | Event detection granularity | **Open:** block-range polling is preferred, but confirmation depth, reorg handling, chunk sizing, cursor persistence, and free/paid tuning still need a decision. |
+| 4 | Profit inputs | **Open:** scorer must use realized cashflow reconstruction rather than UI `cashPnl`; exact Data API/chain reconstruction design remains to be decided. |
+| 5 | Scheduler | **Agreed:** asyncio task loops for v0.1; APScheduler may be reconsidered later if persisted or complex schedules are needed. |
+| 6 | Event identity shape | **Open:** on-chain detection sees addresses before database UUIDs exist; choose and document the address-first → persistence boundary before implementing the adapter. |

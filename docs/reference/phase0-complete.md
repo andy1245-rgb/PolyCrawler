@@ -257,13 +257,9 @@ Use this in CI pipelines after running `alembic upgrade head` to catch missing a
 
 **File:** `README.md`
 
-The status line was updated from:
+The current project status is:
 
-> **Status:** v0.1.5 — specification only. Implementation not started.
-
-to:
-
-> **Status:** v0.1.5 — Phase 0 (bootstrap) complete. Config schema, DB models, Alembic migrations, test infrastructure, and app entry point are in place. Moving to Phase 1 (discovery engine).
+> **Status:** v0.1.5 — Phases 0–1 complete. Config schema, DB models, migrations, test infrastructure, app entry point, and the manual seed CLI are in place. Phase 2 (parent watcher + scoring) is next.
 
 ---
 

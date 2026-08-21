@@ -21,3 +21,12 @@
 - **#4 Telegram** does **not** block Phase 1–3b; dashboard channel is enough for paper trading.
 - **#1 Tag weighting** does **not** block v0.1; allow-list filter is sufficient.
 - **#3 RPC budget** no longer blocks Phase 2 — proceed with public RPC + usage logs; revisit caps when moving to a paid provider.
+
+## Phase 2 questions intentionally deferred
+
+These decisions are recorded for discussion when the relevant Phase 2 slice is reached:
+
+1. **Polling/reorg policy:** block-range polling is preferred, but confirmation depth, re-scan behavior, chunk size, cursor persistence, and free-tier versus paid-tier tuning remain open.
+2. **Profit reconstruction:** the scorer must use realized cashflow reconstruction rather than UI `cashPnl`; the exact Data API/chain inputs and reconstruction rules remain open.
+3. **Event identity:** detection observes addresses before `Account` rows and UUIDs necessarily exist; the address-first event and persistence boundary remain open.
+4. **Multicall details:** the abstraction boundary is agreed, but the exact private Multicall3 call encoding, failure semantics, batching limits, and retry behavior will be finalized during Track C.

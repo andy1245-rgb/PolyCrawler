@@ -15,7 +15,7 @@
 | YAML | PyYAML | Config file format |
 | Blockchain | web3.py | Ethereum/Polygon RPC client |
 | HTTP | httpx | Async HTTP for Data API |
-| Scheduling | APScheduler | Periodic task orchestration |
+| Scheduling | asyncio task loops (v0.1) | Simple periodic orchestration; APScheduler remains a later option for persisted/complex schedules |
 | Testing | pytest + pytest-asyncio + pytest-cov | Standard Python test stack |
 | Linting | ruff | Fast Python linter |
 | Typing | mypy | Static type checking |
