@@ -31,6 +31,9 @@ discovery:
   minSignals: 4
   minSuspiciousAccounts: 2
   excludedFunders: []
+  hubMinCounterparties: 50
+  fundingHops: 2
+  minFundingUsd: 1
 
 strategy:
   minNetUsd: 500

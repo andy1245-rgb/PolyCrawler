@@ -43,7 +43,7 @@ Parquet tables in `data/`:
 |-------|---------|--------|
 | `markets` | `marketId`, `question`, `tags`, `endDate`, `winner`, `volumeUsd` | Gamma API |
 | `fills` | `ts`, `account`, `marketId`, `outcome`, `side`, `size`, `price` | Data API `/trades?market=` |
-| `funding` | `ts`, `fromAddr`, `toAddr`, `amountUsd` | Polygon RPC — USDC transfers into accounts |
+| `funding` | `ts`, `fromAddr`, `toAddr`, `amountUsd`, `txHash` | Polygon ERC-20 collateral transfers (Etherscan) |
 | `prices` | `ts`, `marketId`, `outcome`, `price` | CLOB `prices-history` |
 
 Fetch order: pick markets (by tags / volume / date) → all their fills → funding for accounts that look interesting → prices for markets clusters traded.
@@ -62,11 +62,19 @@ Fetch order: pick markets (by tags / volume / date) → all their fills → fund
 
 An account is **suspicious** if it passes at least `minSignals` of these (default 4).
 
-**Step 2 — Find the funder.** For each suspicious account, find who sent its first USDC. Skip funders on `excludedFunders` (exchanges, bridges, Polymarket infra) — otherwise one exchange wallet looks like a giant cluster.
+**Step 2 — Trace funding.** For each suspicious account, and for labeled wallets when a label file is supplied, read Polygon ERC-20 transfers from Etherscan (`chainid=137`). Keep collateral only: USDC.e, native USDC, pUSD, and Polygon USDT (USDT0). Drop anything under `minFundingUsd` (default 1). Incoming transfers are funding. Outgoing transfers are cash-outs, except where the other side is a Polymarket contract (CTF exchange, NegRisk exchange/adapter, conditional tokens, proxy/safe factories, and the V2 position, router, and collateral ramp contracts) — those are trades and redeems. Raw responses are cached under `data/raw/etherscan/`.
 
-**Step 3 — Group into clusters.** Group suspicious accounts by funder. A funder is a **parent** if it funded at least `minSuspiciousAccounts` suspicious accounts (default 2). Then load *all* accounts that parent funded — including ones funded after `splitDate`, since new siblings are exactly what we want to copy.
+A counterparty is a **hub** when a page of its transfers (up to 1000) has at least `hubMinCounterparties` distinct collateral counterparties (default 50). The newest page is checked first. If that page is full and still under the threshold, the oldest page is checked too. A contract with real bytecode (not a tiny clone) that fills a 1000-row page is a hub even when those rows sit on a few pools. Hubs are deposit solvers, bridges, routers, and exchange hot wallets. They are not parents. `excludedFunders` is the same kind of skip, entered by hand.
 
-Output `parents.parquet`: `parent`, `accountCount`, `suspiciousCount`, `totalProfitUsd`, `firstSeen`.
+**Step 3 — Group into clusters.** Using transfers before `splitDate` only, link accounts that share a non-hub funder, share a non-hub cash-out destination, or send collateral to each other. If `fundingHops` is 2 (the default) and a funder is a non-hub EOA, also link accounts that share that funder's funder. A connected component with at least `minSuspiciousAccounts` suspicious accounts (default 2) is a cluster. The parent is the non-hub funder shared by the most suspicious accounts in the component. If the component is only tied by cash-outs or direct transfers, the parent is `component:<clusterId>`.
+
+Then list every account that parent sent collateral to, including accounts funded after `splitDate`. Those siblings are what the strategy would copy.
+
+Output:
+
+- `funding.parquet` — `ts`, `fromAddr`, `toAddr`, `amountUsd`, `txHash`
+- `parents.parquet` — `parent`, `clusterId`, `accountCount`, `suspiciousCount`, `totalProfitUsd`, `firstSeen`, `linkTypes`
+- `clusterAccounts.parquet` — `clusterId`, `account`, `linkType`
 
 **Checking discovery on its own:** of the clusters found before `splitDate`, how many kept winning after it? That's the first number to look at — if found clusters don't keep winning, the strategy can't work.
 
@@ -101,6 +109,9 @@ discovery:
   minSignals: 4
   minSuspiciousAccounts: 2
   excludedFunders: []
+  hubMinCounterparties: 50
+  fundingHops: 2
+  minFundingUsd: 1
 
 strategy:
   minNetUsd: 500
@@ -154,11 +165,11 @@ Discovery stays in this repo for now. It only talks to the rest through `data/` 
 
 ## 11. Later (not in v0.2)
 
-Scored ranking instead of signal counts · multi-hop funding · take profit / stop loss · order book fills · walk-forward validation · paper trading · live trading · dashboard · alerts · database.
+Scored ranking instead of signal counts · funding hops past `fundingHops` · take profit / stop loss · order book fills · walk-forward validation · paper trading · live trading · dashboard · alerts · database.
 
 ## 12. Open questions
 
-1. Polygon RPC provider for USDC transfers (Alchemy free tier is likely enough to start).
-2. Which USDC contract(s) Polymarket accounts are funded with after the V2 migration — verify in phase 3.
+1. Polygon funding source — resolved: Etherscan V2 (`chainid=137`). Alchemy Polygon was not enabled for this key.
+2. Collateral after the V2 migration — labeled deposits in this window are USDC.e. Native USDC, pUSD, and Polygon USDT (USDT0) also move and are all kept.
 3. Starting market set: which tags / date range.
 4. Ranking metric for sweeps: total PnL or PnL ÷ max drawdown.
