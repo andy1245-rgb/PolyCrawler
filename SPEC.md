@@ -50,7 +50,7 @@ Fetch order: pick markets (by tags / volume / date) → all their fills → fund
 
 ## 5. Discovery
 
-**Step 1 — Flag suspicious accounts.** For each account, from fills in resolved markets before `splitDate`:
+**Step 1 — Flag suspicious accounts.** For each account, from fills in markets resolved (`resolvedAt`) before `splitDate`, score the account on its most profitable winning bet (shares bought − USD spent):
 
 | Signal | Config key | Default |
 |--------|-----------|---------|
