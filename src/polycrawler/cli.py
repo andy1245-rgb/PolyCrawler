@@ -1,4 +1,5 @@
-from collections import defaultdict
+import time
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Annotated
 
@@ -66,8 +67,10 @@ def discover(
     if step1Only:
         return
     extra = [row.wallet for row in labelTable] if labelTable else []
+    started = time.perf_counter()
     funding = runFunding(loaded, refresh=refresh, extraAccounts=extra)
     echoFunding(funding)
+    typer.echo(f"discover seconds {time.perf_counter() - started:.1f}")
     if labelTable is not None:
         echoLabelClusters(labelTable, funding)
 
@@ -97,6 +100,36 @@ def echoFunding(funding: FundingResult) -> None:
         shown = ", ".join(f"{name} {count}" for name, count in funding.otherTokens)
         typer.echo(f"other incoming {shown}")
     typer.echo(f"etherscan fetched {funding.fetched} cached {funding.cached}")
+    typer.echo(
+        f"origins {funding.origins} users {funding.originUsers} "
+        f"unresolved {funding.unresolvedOrigins} deposits {funding.bridgeDeposits}"
+    )
+    typer.echo(f"origin chains {funding.originChainText or '-'}")
+    if funding.bridgeHubs:
+        typer.echo(f"bridge hubs {' '.join(funding.bridgeHubs)}")
+    typer.echo(
+        f"siblings {funding.siblings} outsideSuspicious {funding.siblingsOutside} "
+        f"firstAfterSplit {funding.siblingsAfterSplit}"
+    )
+    typer.echo(f"coTrade edges {funding.coTradeEdges}")
+    counts: Counter[str] = Counter()
+    if funding.members.height:
+        for row in funding.members.iter_rows(named=True):
+            for kind in str(row["linkType"]).split(","):
+                if kind:
+                    counts[kind] += 1
+    if counts:
+        typer.echo("link accounts " + " ".join(f"{kind} {counts[kind]}" for kind in sorted(counts)))
+    else:
+        typer.echo("link accounts none")
+    typer.echo(
+        f"relay calls {funding.relayCalls} cache {funding.relayCacheHits} "
+        f"rateLimits {funding.relayRateLimits} seconds {funding.relaySeconds:.1f}"
+    )
+    if funding.alchemyBlock is not None:
+        typer.echo(
+            f"alchemy block {funding.alchemyBlock} payoutConfirmed {funding.alchemyPayoutConfirmed}"
+        )
 
 
 def echoLabelClusters(labels: list, funding: FundingResult) -> None:
@@ -104,8 +137,8 @@ def echoLabelClusters(labels: list, funding: FundingResult) -> None:
         row["account"]: row
         for row in funding.members.iter_rows(named=True)
     } if funding.members.height else {}
-    parentByCluster = {
-        row["clusterId"]: row["parent"]
+    byCluster = {
+        row["clusterId"]: row
         for row in funding.parents.iter_rows(named=True)
     } if funding.parents.height else {}
     labeledByCluster: dict[str, list[str]] = defaultdict(list)
@@ -113,17 +146,19 @@ def echoLabelClusters(labels: list, funding: FundingResult) -> None:
         hit = byAccount.get(label.wallet)
         if hit is not None:
             labeledByCluster[hit["clusterId"]].append(label.wallet)
-    typer.echo(f"{'wallet':<42}  {'case':<18}  cluster  parent  labeledWith")
+    typer.echo(f"{'wallet':<42}  {'case':<18}  {'cluster':<12}  size  links  parent")
     for label in labels:
         hit = byAccount.get(label.wallet)
         if hit is None:
             typer.echo(f"{label.wallet:<42}  {label.case:<18}  -")
             continue
-        others = [item for item in labeledByCluster[hit["clusterId"]] if item != label.wallet]
+        cluster = byCluster.get(hit["clusterId"], {})
+        size = cluster.get("accountCount", "-")
+        links = hit["linkType"]
+        parent = cluster.get("parent", "-")
         typer.echo(
-            f"{label.wallet:<42}  {label.case:<18}  {hit['clusterId']}  "
-            f"{parentByCluster.get(hit['clusterId'], '-')}  "
-            f"{', '.join(others) if others else '-'}"
+            f"{label.wallet:<42}  {label.case:<18}  {hit['clusterId']:<12}  "
+            f"{size}  {links}  {parent}"
         )
 
 

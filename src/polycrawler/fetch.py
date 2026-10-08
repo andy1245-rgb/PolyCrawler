@@ -1,5 +1,5 @@
 import json
-import time
+import os
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -9,6 +9,9 @@ import httpx
 import polars as pl
 
 from polycrawler.config import Config, FetchConfig
+from polycrawler.http import HttpSession, cachePath, writeJson
+
+__all__ = ["cachePath", "writeJson"]
 
 gammaApi = "https://gamma-api.polymarket.com"
 dataApi = "https://data-api.polymarket.com"
@@ -341,34 +344,21 @@ def fetchEventsByTag(
     return events
 
 
+_sessions: dict[int, HttpSession] = {}
+
+
+def sessionFor(client: httpx.Client) -> HttpSession:
+    # requestSleepSec is the legacy per-call pause. 0 disables the limiter so tests stay instant.
+    rate = 0.0 if requestSleepSec <= 0 else 1.0 / requestSleepSec
+    found = _sessions.get(id(client))
+    if found is None or found.client is not client or found.defaultRate != rate:
+        found = HttpSession(client=client, defaultRate=rate)
+        _sessions[id(client)] = found
+    return found
+
+
 def getJson(client: httpx.Client, url: str, params: dict[str, Any]) -> Any:
-    delay = 0.5
-    last: httpx.Response | None = None
-    for _attempt in range(5):
-        response = client.get(url, params=params)
-        last = response
-        if response.status_code == 429 or response.status_code >= 500:
-            time.sleep(delay)
-            delay *= 2
-            continue
-        if response.status_code >= 400:
-            raise RuntimeError(f"{response.status_code} {url} {response.text[:300]}")
-        if requestSleepSec:
-            time.sleep(requestSleepSec)
-        return response.json()
-    detail = last.text[:300] if last is not None else ""
-    status = last.status_code if last is not None else ""
-    raise RuntimeError(f"gave up after retries: {status} {url} {detail}")
-
-
-def cachePath(dataDir: str, kind: str, key: str) -> Path:
-    safe = key.replace("/", "_")
-    return Path(dataDir) / "raw" / kind / f"{safe}.json"
-
-
-def writeJson(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload))
+    return sessionFor(client).getJson(url, params)
 
 
 def dedupeRows(rows: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
@@ -392,6 +382,125 @@ def dedupeFills(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         seen.add(key)
         out.append(row)
     return out
+
+
+# keccak256("Transfer(address,address,uint256)")
+transferTopic = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+alchemyHost = "polygon-mainnet.g.alchemy.com"
+
+
+def loadApiKey(name: str) -> str:
+    found = os.environ.get(name, "").strip()
+    if found:
+        return found
+    candidates = [Path.cwd() / ".env", Path(__file__).resolve().parents[2] / ".env"]
+    for path in candidates:
+        if not path.exists():
+            continue
+        for line in path.read_text().splitlines():
+            text = line.strip()
+            if not text or text.startswith("#") or "=" not in text:
+                continue
+            if text.startswith("export "):
+                text = text[len("export ") :]
+            key, value = text.split("=", 1)
+            if key.strip() == name:
+                cleaned = value.strip().strip('"').strip("'")
+                if cleaned:
+                    return cleaned
+    return ""
+
+
+def alchemyUrl(key: str) -> str:
+    return f"https://{alchemyHost}/v2/{key}"
+
+
+def topicAddress(address: str) -> str:
+    return "0x" + address.lower().removeprefix("0x").zfill(64)
+
+
+def transferLogFilter(
+    token: str,
+    recipients: list[str],
+    fromBlock: int,
+    toBlock: int,
+) -> dict[str, Any]:
+    # topic2 is the indexed recipient. An array there is OR, so one call covers many wallets.
+    return {
+        "address": token.lower(),
+        "fromBlock": hex(fromBlock),
+        "toBlock": hex(toBlock),
+        "topics": [transferTopic, None, [topicAddress(item) for item in recipients]],
+    }
+
+
+def decodeTransferLog(log: dict[str, Any], decimals: int = 6) -> dict[str, Any] | None:
+    topics = log.get("topics") or []
+    if len(topics) < 3 or not log.get("data"):
+        return None
+    return {
+        "token": str(log.get("address") or "").lower(),
+        "fromAddr": "0x" + str(topics[1])[-40:],
+        "toAddr": "0x" + str(topics[2])[-40:],
+        "amountUsd": int(str(log["data"]), 16) / (10**decimals),
+        "txHash": str(log.get("transactionHash") or "").lower(),
+        "block": int(str(log.get("blockNumber") or "0"), 16),
+    }
+
+
+def fetchErc20Transfers(
+    session: HttpSession,
+    rpcUrl: str,
+    token: str,
+    recipients: list[str],
+    fromBlock: int,
+    toBlock: int,
+    addressBatch: int = 40,
+    blockSpan: int = 2000,
+    rpcBatch: int = 8,
+) -> list[dict[str, Any]]:
+    """Batched eth_getLogs: recipient sets OR'd in topic2, several ranges per HTTP call."""
+    calls: list[dict[str, Any]] = []
+    span = max(1, blockSpan)
+    width = max(1, addressBatch)
+    for start in range(fromBlock, toBlock + 1, span):
+        end = min(toBlock, start + span - 1)
+        for offset in range(0, len(recipients), width):
+            chunk = recipients[offset : offset + width]
+            if chunk:
+                calls.append(transferLogFilter(token, chunk, start, end))
+    found: list[dict[str, Any]] = []
+    step = max(1, rpcBatch)
+    for offset in range(0, len(calls), step):
+        batch = calls[offset : offset + step]
+        payload = [
+            {"jsonrpc": "2.0", "id": index, "method": "eth_getLogs", "params": [call]}
+            for index, call in enumerate(batch)
+        ]
+        response = session.postJson(rpcUrl, payload)
+        rows = response if isinstance(response, list) else [response]
+        byId = {item.get("id"): item for item in rows if isinstance(item, dict)}
+        for index in range(len(batch)):
+            item = byId.get(index, {})
+            if item.get("error"):
+                message = str(item["error"].get("message") if isinstance(item["error"], dict) else item["error"])
+                raise RuntimeError(f"eth_getLogs failed: {message[:200]}")
+            for log in item.get("result") or []:
+                if isinstance(log, dict):
+                    parsed = decodeTransferLog(log)
+                    if parsed is not None:
+                        found.append(parsed)
+    return found
+
+
+def alchemyBlockNumber(session: HttpSession, rpcUrl: str) -> int | None:
+    payload = session.postJson(
+        rpcUrl,
+        {"jsonrpc": "2.0", "id": 1, "method": "eth_blockNumber", "params": []},
+    )
+    if not isinstance(payload, dict) or payload.get("error") or not payload.get("result"):
+        return None
+    return int(str(payload["result"]), 16)
 
 
 def upsertTable(
