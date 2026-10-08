@@ -5,7 +5,7 @@ import threading
 import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -14,7 +14,18 @@ import httpx
 import polars as pl
 
 from polycrawler.config import Config, DiscoveryConfig
-from polycrawler.fetch import cachePath, dataApi, getJson, userAgent, writeJson
+from polycrawler.fetch import (
+    alchemyBlockNumber,
+    alchemyUrl,
+    cachePath,
+    dataApi,
+    fetchErc20Transfers,
+    getJson,
+    loadApiKey,
+    userAgent,
+    writeJson,
+)
+from polycrawler.http import HttpSession, JsonRequest, rateLimitMessage
 
 # Data API /activity silently caps limit at 500 and rejects offset > 5000
 # ("max historical activity offset of 5000 exceeded"). Offsets 0,500,...,5000
@@ -555,6 +566,33 @@ clusterAccountSchema = {
     "account": pl.String,
     "linkType": pl.String,
 }
+originsSchema = {
+    "account": pl.String,
+    "payoutTxHash": pl.String,
+    "originUser": pl.String,
+    "originChainId": pl.Int64,
+    "amountUsd": pl.Float64,
+    "ts": pl.Datetime(time_unit="us", time_zone="UTC"),
+}
+originRecipientSchema = {
+    "originUser": pl.String,
+    "recipient": pl.String,
+    "originChainId": pl.Int64,
+    "destinationChainId": pl.Int64,
+    "payoutTxHash": pl.String,
+    "amountUsd": pl.Float64,
+    "ts": pl.Datetime(time_unit="us", time_zone="UTC"),
+}
+# Public lookup is GET /requests/v2. v3 only returns the caller's own integrator
+# requests. v2's limit steps down from 2026-09-01 and the route is retired
+# 2026-11-24. 429 has no Retry-After. `limit` must be <= 50; the next page is
+# the opaque `continuation` cursor.
+relayApi = "https://api.relay.link/requests/v2"
+relayPageCap = 50
+polygonChainId = 137
+relayUserPageCap = 40
+bridgeHubMinAccounts = 5
+usdcE = "0x2791bca1f2de4661ed88a30c99a7a9449aa84174"
 
 
 @dataclass(frozen=True)
@@ -592,6 +630,22 @@ class FundingResult:
     members: pl.DataFrame
     fundingRows: int = 0
     skippedPolymarket: int = 0
+    origins: int = 0
+    originUsers: int = 0
+    originChainText: str = ""
+    unresolvedOrigins: int = 0
+    siblings: int = 0
+    siblingsOutside: int = 0
+    siblingsAfterSplit: int = 0
+    relayCalls: int = 0
+    relayCacheHits: int = 0
+    relayRateLimits: int = 0
+    relaySeconds: float = 0.0
+    bridgeHubs: list[str] = field(default_factory=list)
+    alchemyBlock: int | None = None
+    alchemyPayoutConfirmed: bool | None = None
+    bridgeDeposits: int = 0
+    coTradeEdges: int = 0
 
 
 def loadEtherscanKey() -> str:
@@ -908,6 +962,11 @@ def buildFundingClusters(
     fundingHops: int,
     minFundingUsd: float,
     fundedByParent: dict[str, set[str]] | None = None,
+    originGroups: dict[str, set[str]] | None = None,
+    siblingGroups: dict[str, set[str]] | None = None,
+    siblingExtras: dict[str, set[str]] | None = None,
+    coTrades: list[tuple[str, str]] | None = None,
+    originTimes: dict[str, int] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     accounts = {account.lower() for account in accounts}
     suspicious = {account.lower() for account in suspicious} & accounts
@@ -921,6 +980,19 @@ def buildFundingClusters(
         parent.lower(): {account.lower() for account in recipients}
         for parent, recipients in (fundedByParent or {}).items()
     }
+    originGroups = {
+        origin.lower(): {account.lower() for account in group}
+        for origin, group in (originGroups or {}).items()
+    }
+    siblingGroups = {
+        origin.lower(): {account.lower() for account in group}
+        for origin, group in (siblingGroups or {}).items()
+    }
+    siblingExtras = {
+        origin.lower(): {account.lower() for account in group}
+        for origin, group in (siblingExtras or {}).items()
+    }
+    originTimes = {account.lower(): ts for account, ts in (originTimes or {}).items()}
     usable = [
         row
         for row in transfers
@@ -990,6 +1062,15 @@ def buildFundingClusters(
         for group in reached.values():
             linkGroup(group, "hop")
 
+    for group in originGroups.values():
+        linkGroup(group, "sharedOrigin")
+    for group in siblingGroups.values():
+        linkGroup(group, "originSibling")
+    for left, right in coTrades or []:
+        left, right = left.lower(), right.lower()
+        if left in uf and right in uf and left != right:
+            union(left, right, "coTrade")
+
     components: dict[str, list[str]] = defaultdict(list)
     for account in accounts:
         components[find(account)].append(account)
@@ -1032,21 +1113,56 @@ def buildFundingClusters(
             if bestAddr is None or count > bestCount or (count == bestCount and addr < bestAddr):
                 bestAddr = addr
                 bestCount = count
+        originScores: dict[str, set[str]] = defaultdict(set)
+        for origin, group in originGroups.items():
+            hit = {account for account in group if account in component and account in suspicious}
+            if hit:
+                originScores[origin] |= hit
+        for origin, group in siblingGroups.items():
+            hit = {account for account in group if account in component and account in suspicious}
+            if hit:
+                originScores[origin] |= hit
+        bestOrigin = None
+        bestOriginCount = 0
+        for addr, hit in originScores.items():
+            count = len(hit)
+            if count < 2:
+                continue
+            if (
+                bestOrigin is None
+                or count > bestOriginCount
+                or (count == bestOriginCount and addr < bestOrigin)
+            ):
+                bestOrigin = addr
+                bestOriginCount = count
         clusterId = min(component)
-        parent = bestAddr if bestAddr is not None else f"component:{clusterId}"
+        if bestOrigin is not None:
+            parent = bestOrigin
+        elif bestAddr is not None:
+            parent = bestAddr
+        else:
+            parent = f"component:{clusterId}"
         times = [
             row.ts
             for row in usable
             if row.fromAddr in component or row.toAddr in component
         ]
+        for account in component:
+            if account in originTimes:
+                times.append(originTimes[account])
         kinds = {kind for account in component for kind in linkOf[account]}
         present = set(component)
-        extras: list[str] = []
+        extras: list[tuple[str, str]] = []
+        pools: list[tuple[str, set[str]]] = []
+        if parent in siblingExtras:
+            pools.append(("originSibling", siblingExtras[parent]))
         if not parent.startswith("component:"):
-            for account in sorted(funded.get(parent, ())):
+            pools.append(("funded", funded.get(parent, set())))
+        for kind, pool in pools:
+            for account in sorted(pool):
                 if account in present or account in blocked or account == parent:
                     continue
-                extras.append(account)
+                extras.append((account, kind))
                 present.add(account)
         parentRows.append(
             {
@@ -1067,9 +1183,9 @@ def buildFundingClusters(
                     "linkType": ",".join(sorted(linkOf[account])),
                 }
             )
-        for account in extras:
+        for account, kind in extras:
             memberRows.append(
-                {"clusterId": clusterId, "account": account, "linkType": "funded"}
+                {"clusterId": clusterId, "account": account, "linkType": kind}
             )
     return parentRows, memberRows
 
@@ -1265,21 +1381,48 @@ def runFunding(
                 for item in outgoingRecipients(parent, history, minimum)
                 if item not in blocked and item != parent
             }
-        if fundedByParent:
-            parentRows, memberRows = buildFundingClusters(
-                accounts=traced,
-                suspicious=suspicious,
-                transfers=transfers,
-                blocked=blocked,
-                eoaFunders=eoaFunders,
-                grandparents=grandparents,
-                profits=profits,
-                splitTs=splitTs,
-                minSuspiciousAccounts=config.discovery.minSuspiciousAccounts,
-                fundingHops=config.discovery.fundingHops,
-                minFundingUsd=minimum,
-                fundedByParent=fundedByParent,
+        linked = linkOrigins(
+            config,
+            client,
+            dataDir,
+            refresh,
+            transfers,
+            traced,
+            suspicious,
+            splitTs,
+            hubs,
+        )
+        fillsPath = Path(dataDir) / "fills.parquet"
+        coTrades = (
+            coTradePairs(
+                pl.read_parquet(fillsPath),
+                suspicious,
+                splitCutoff(config.splitDate),
+                config.discovery.coTradeWindowSec,
+                config.discovery.minCoTrades,
             )
+            if fillsPath.exists()
+            else []
+        )
+        parentRows, memberRows = buildFundingClusters(
+            accounts=traced,
+            suspicious=suspicious,
+            transfers=transfers,
+            blocked=blocked,
+            eoaFunders=eoaFunders,
+            grandparents=grandparents,
+            profits=profits,
+            splitTs=splitTs,
+            minSuspiciousAccounts=config.discovery.minSuspiciousAccounts,
+            fundingHops=config.discovery.fundingHops,
+            minFundingUsd=minimum,
+            fundedByParent=fundedByParent,
+            originGroups=linked.originGroups,
+            siblingGroups=linked.siblingGroups,
+            siblingExtras=linked.siblingExtras,
+            coTrades=coTrades,
+            originTimes=linked.originTimes,
+        )
     finally:
         if ownClient:
             client.close()
@@ -1304,6 +1447,9 @@ def runFunding(
     funding.write_parquet(out / "funding.parquet")
     parents.write_parquet(out / "parents.parquet")
     members.write_parquet(out / "clusterAccounts.parquet")
+    linked.origins.write_parquet(out / "origins.parquet")
+    linked.recipients.write_parquet(out / "originRecipients.parquet")
+    chainText = " ".join(f"{chain}:{count}" for chain, count in sorted(linked.chains.items()))
     return FundingResult(
         traced=len(traced),
         hubs=hubList,
@@ -1316,6 +1462,22 @@ def runFunding(
         members=members,
         fundingRows=funding.height,
         skippedPolymarket=skippedPolymarket,
+        origins=linked.originsResolved,
+        originUsers=linked.originUsers,
+        originChainText=chainText,
+        unresolvedOrigins=linked.unresolved,
+        siblings=linked.siblings,
+        siblingsOutside=linked.siblingsOutside,
+        siblingsAfterSplit=linked.siblingsAfterSplit,
+        relayCalls=linked.relayCalls,
+        relayCacheHits=linked.relayCacheHits,
+        relayRateLimits=linked.relayRateLimits,
+        relaySeconds=linked.seconds,
+        bridgeHubs=linked.bridgeHubs,
+        alchemyBlock=linked.alchemyBlock,
+        alchemyPayoutConfirmed=linked.alchemyPayoutConfirmed,
+        bridgeDeposits=linked.deposits,
+        coTradeEdges=len(coTrades),
     )
 
 
@@ -1401,3 +1563,523 @@ def hopSources(
             for funder, sources in grandparents.items()
         }
     return eoaFunders, grandparents, extraHubs
+
+
+@dataclass(frozen=True)
+class RelayRequest:
+    user: str
+    recipient: str
+    originChainId: int | None
+    destinationChainId: int | None
+    payoutTxHash: str
+    inTxHash: str
+    amountUsd: float | None
+    ts: int | None
+    status: str
+    block: int | None
+
+
+@dataclass
+class RelayPage:
+    rows: list[RelayRequest]
+    continuation: str | None
+
+
+@dataclass
+class OriginLinks:
+    origins: pl.DataFrame
+    recipients: pl.DataFrame
+    originGroups: dict[str, set[str]]
+    siblingGroups: dict[str, set[str]]
+    siblingExtras: dict[str, set[str]]
+    originTimes: dict[str, int]
+    chains: dict[int, int]
+    originsResolved: int
+    originUsers: int
+    unresolved: int
+    siblings: int
+    siblingsOutside: int
+    siblingsAfterSplit: int
+    relayCalls: int
+    relayCacheHits: int
+    relayRateLimits: int
+    seconds: float
+    bridgeHubs: list[str]
+    deposits: int
+    alchemyBlock: int | None
+    alchemyPayoutConfirmed: bool | None
+
+
+def _asInt(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        if isinstance(value, str) and value.startswith(("0x", "0X")):
+            return int(value, 16)
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _unix(value: Any) -> int | None:
+    number = _asInt(value)
+    if number is None:
+        return None
+    return number
+
+
+def _iso(value: Any) -> int | None:
+    if not isinstance(value, str) or not value:
+        return None
+    text = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return int(parsed.timestamp())
+
+
+def _usd(node: Any) -> float | None:
+    if not isinstance(node, dict):
+        return None
+    raw = node.get("amountUsd")
+    if raw is None or raw == "":
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _chainOf(tx: dict[str, Any], meta: dict[str, Any], key: str) -> int | None:
+    found = _asInt(tx.get("chainId"))
+    if found is not None:
+        return found
+    node = meta.get(key)
+    if not isinstance(node, dict):
+        return None
+    currency = node.get("currency")
+    if not isinstance(currency, dict):
+        return None
+    return _asInt(currency.get("chainId"))
+
+
+def parseRelayRequest(item: dict[str, Any]) -> RelayRequest | None:
+    user = str(item.get("user") or "").lower()
+    if not user:
+        return None
+    data = item.get("data") if isinstance(item.get("data"), dict) else {}
+    inTxs = data.get("inTxs") if isinstance(data.get("inTxs"), list) else []
+    outTxs = data.get("outTxs") if isinstance(data.get("outTxs"), list) else []
+    in0 = inTxs[0] if inTxs and isinstance(inTxs[0], dict) else {}
+    out0 = outTxs[0] if outTxs and isinstance(outTxs[0], dict) else {}
+    meta = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
+    ts = _unix(out0.get("timestamp"))
+    if ts is None:
+        ts = _unix(in0.get("timestamp"))
+    if ts is None:
+        ts = _iso(item.get("createdAt"))
+    amount = _usd(meta.get("currencyOut"))
+    if amount is None:
+        amount = _usd(meta.get("currencyIn"))
+    return RelayRequest(
+        user=user,
+        recipient=str(item.get("recipient") or "").lower(),
+        originChainId=_chainOf(in0, meta, "currencyIn"),
+        destinationChainId=_chainOf(out0, meta, "currencyOut"),
+        payoutTxHash=str(out0.get("hash") or "").lower(),
+        inTxHash=str(in0.get("hash") or "").lower(),
+        amountUsd=amount,
+        ts=ts,
+        status=str(item.get("status") or ""),
+        block=_asInt(out0.get("block")),
+    )
+
+
+def parseRelayPage(payload: Any) -> RelayPage:
+    if not isinstance(payload, dict):
+        raise RuntimeError("relay payload is not an object")
+    if rateLimitMessage(payload):
+        raise RuntimeError("relay rate limit")
+    rows = [
+        parsed
+        for item in (payload.get("requests") or [])
+        if isinstance(item, dict)
+        for parsed in [parseRelayRequest(item)]
+        if parsed is not None
+    ]
+    continuation = payload.get("continuation") or None
+    return RelayPage(rows, str(continuation) if continuation else None)
+
+
+def polygonPayout(row: RelayRequest) -> bool:
+    if row.destinationChainId != polygonChainId or not row.recipient:
+        return False
+    return not row.status or row.status == "success"
+
+
+def matchPayout(rows: list[RelayRequest], txHash: str) -> RelayRequest | None:
+    txHash = txHash.lower()
+    for row in rows:
+        if row.payoutTxHash == txHash or row.inTxHash == txHash:
+            return row
+    if len(rows) == 1 and rows[0].user:
+        return rows[0]
+    return None
+
+
+def firstBridgeDeposits(
+    transfers: list[TransferRow],
+    accounts: set[str],
+    hubs: set[str],
+    minUsd: float,
+    splitTs: int,
+) -> list[TransferRow]:
+    best: dict[str, TransferRow] = {}
+    for row in transfers:
+        if row.ts >= splitTs or row.amountUsd < minUsd:
+            continue
+        if row.toAddr not in accounts or row.fromAddr not in hubs:
+            continue
+        current = best.get(row.toAddr)
+        if current is None or (row.ts, row.txHash) < (current.ts, current.txHash):
+            best[row.toAddr] = row
+    return [best[key] for key in sorted(best)]
+
+
+def sampleOtherHubs(
+    transfers: list[TransferRow],
+    traced: set[str],
+    hubs: set[str],
+    known: set[str],
+    minUsd: float,
+    splitTs: int,
+) -> list[TransferRow]:
+    groups: dict[str, set[str]] = defaultdict(set)
+    sample: dict[str, TransferRow] = {}
+    for row in transfers:
+        if row.ts >= splitTs or row.amountUsd < minUsd:
+            continue
+        if row.toAddr not in traced or row.fromAddr not in hubs or row.fromAddr in known:
+            continue
+        groups[row.fromAddr].add(row.toAddr)
+        current = sample.get(row.fromAddr)
+        if current is None or row.ts < current.ts:
+            sample[row.fromAddr] = row
+    ranked = sorted(groups, key=lambda addr: (-len(groups[addr]), addr))
+    return [sample[addr] for addr in ranked if len(groups[addr]) >= bridgeHubMinAccounts]
+
+
+def fetchRelayHashes(
+    session: HttpSession,
+    txHashes: list[str],
+    refresh: bool,
+    workers: int,
+) -> list[Any]:
+    payloads: list[Any] = []
+    step = 10
+    total = len(txHashes)
+    for offset in range(0, total, step):
+        chunk = txHashes[offset : offset + step]
+        print(f"relay hash {min(offset + step, total)}/{total}", flush=True)
+        requests = [
+            JsonRequest(
+                url=relayApi,
+                params={"hash": txHash},
+                cacheKind="relay",
+                cacheKey=f"hash_{txHash}",
+                refresh=refresh,
+            )
+            for txHash in chunk
+        ]
+        payloads.extend(session.fetchMany(requests, workers))
+    return payloads
+
+
+def fetchRelayUsers(
+    session: HttpSession,
+    users: list[str],
+    limit: int,
+    refresh: bool,
+    workers: int,
+) -> dict[str, list[RelayRequest]]:
+    pending: dict[str, str | None] = {user: None for user in users}
+    collected: dict[str, list[RelayRequest]] = {user: [] for user in users}
+    seen: dict[str, set[str]] = {user: set() for user in users}
+    for page in range(1, relayUserPageCap + 1):
+        if not pending:
+            break
+        ordered = sorted(pending)
+        requests = []
+        for user in ordered:
+            continuation = pending[user]
+            params: dict[str, Any] = {"user": user, "limit": limit}
+            if continuation:
+                params["continuation"] = continuation
+            requests.append(
+                JsonRequest(
+                    url=relayApi,
+                    params=params,
+                    cacheKind="relay",
+                    cacheKey=f"user_{user}_{continuation or 'start'}",
+                    refresh=refresh,
+                )
+            )
+        payloads = session.fetchMany(requests, workers)
+        nxt: dict[str, str | None] = {}
+        for user, payload in zip(ordered, payloads):
+            parsed = parseRelayPage(payload)
+            collected[user].extend(parsed.rows)
+            continuation = parsed.continuation
+            if continuation and continuation not in seen[user]:
+                seen[user].add(continuation)
+                nxt[user] = continuation
+        pending = nxt
+        print(f"relay user page {page} fetched {len(ordered)} remaining {len(pending)}", flush=True)
+    return collected
+
+
+def matchTimes(left: list[Any], right: list[Any], windowSec: int) -> int:
+    index = 0
+    other = 0
+    matched = 0
+    while index < len(left) and other < len(right):
+        delta = (left[index] - right[other]).total_seconds()
+        if abs(delta) <= windowSec:
+            matched += 1
+            index += 1
+            other += 1
+        elif delta < 0:
+            index += 1
+        else:
+            other += 1
+    return matched
+
+
+def coTradePairs(
+    fills: pl.DataFrame,
+    accounts: set[str],
+    cutoff: datetime,
+    windowSec: int,
+    minCount: int,
+) -> list[tuple[str, str]]:
+    if windowSec < 0 or minCount <= 0 or len(accounts) < 2 or fills.height == 0:
+        return []
+    buys = fills.filter(
+        (pl.col("side") == "BUY")
+        & (pl.col("ts") < cutoff)
+        & pl.col("account").is_in(list(accounts))
+    )
+    grouped: dict[tuple[str, str], dict[str, list[Any]]] = defaultdict(lambda: defaultdict(list))
+    for row in buys.select(["account", "marketId", "outcome", "ts"]).iter_rows(named=True):
+        grouped[(row["marketId"], row["outcome"])][str(row["account"]).lower()].append(row["ts"])
+    counts: dict[tuple[str, str], int] = defaultdict(int)
+    for byAccount in grouped.values():
+        names = sorted(byAccount)
+        for index, left in enumerate(names):
+            leftTimes = sorted(byAccount[left])
+            for right in names[index + 1 :]:
+                matched = matchTimes(leftTimes, sorted(byAccount[right]), windowSec)
+                if matched:
+                    counts[(left, right)] += matched
+    return [pair for pair, count in sorted(counts.items()) if count >= minCount]
+
+
+def _stamp(ts: int | None) -> datetime | None:
+    if ts is None:
+        return None
+    return datetime.fromtimestamp(ts, tz=timezone.utc)
+
+
+def _table(rows: list[dict[str, Any]], schema: dict[str, pl.DataType], sortBy: list[str]) -> pl.DataFrame:
+    if not rows:
+        return pl.DataFrame(schema=schema)
+    frame = pl.DataFrame(rows, schema=schema)
+    subset = [key for key in ("payoutTxHash", "recipient", "account") if key in frame.columns]
+    if subset:
+        frame = frame.unique(subset=subset, keep="first")
+    return frame.sort(sortBy)
+
+
+def confirmSolverPayout(
+    session: HttpSession,
+    sample: RelayRequest,
+    recipients: list[str],
+) -> tuple[int | None, bool | None]:
+    key = loadApiKey("ALCHEMY_API_KEY")
+    if not key:
+        return None, None
+    url = alchemyUrl(key)
+    try:
+        block = alchemyBlockNumber(session, url)
+    except (RuntimeError, httpx.HTTPError, ValueError):
+        return None, False
+    if block is None or sample.block is None:
+        return block, None
+    wanted: list[str] = []
+    for recipient in [sample.recipient, *recipients]:
+        if recipient and recipient not in wanted:
+            wanted.append(recipient)
+        if len(wanted) >= 8:
+            break
+    try:
+        logs = fetchErc20Transfers(
+            session,
+            url,
+            usdcE,
+            wanted,
+            sample.block,
+            sample.block,
+            addressBatch=40,
+            blockSpan=1,
+            rpcBatch=1,
+        )
+    except (RuntimeError, httpx.HTTPError, ValueError):
+        return block, False
+    confirmed = any(
+        log["txHash"] == sample.payoutTxHash and log["toAddr"] == sample.recipient for log in logs
+    )
+    return block, confirmed
+
+
+def linkOrigins(
+    config: Config,
+    client: httpx.Client,
+    dataDir: str,
+    refresh: bool,
+    transfers: list[TransferRow],
+    traced: set[str],
+    suspicious: set[str],
+    splitTs: int,
+    hubs: set[str],
+) -> OriginLinks:
+    started = time.perf_counter()
+    discovery = config.discovery
+    workers = max(1, discovery.httpMaxWorkers)
+    limit = min(relayPageCap, max(1, int(discovery.relayPageLimit)))
+    session = HttpSession(
+        client=client,
+        dataDir=dataDir,
+        hostRates={
+            "api.relay.link": discovery.relayRequestsPerSec,
+            "polygon-mainnet.g.alchemy.com": 5.0,
+        },
+    )
+    known = {addr.lower() for addr in discovery.bridgeHubs}
+    samples = sampleOtherHubs(
+        transfers,
+        traced,
+        hubs,
+        known,
+        discovery.minBridgeDepositUsd,
+        splitTs,
+    )[: max(0, discovery.bridgeProbeLimit)]
+    if samples:
+        print(f"relay hub probe {len(samples)}", flush=True)
+        probed = fetchRelayHashes(session, [row.txHash for row in samples], refresh, workers)
+        for row, payload in zip(samples, probed):
+            page = parseRelayPage(payload)
+            if matchPayout(page.rows, row.txHash) is not None:
+                known.add(row.fromAddr)
+    deposits = firstBridgeDeposits(transfers, traced, known, discovery.minBridgeDepositUsd, splitTs)
+    payloads = fetchRelayHashes(session, [row.txHash for row in deposits], refresh, workers)
+    resolved: list[tuple[TransferRow, RelayRequest]] = []
+    unresolved = 0
+    for row, payload in zip(deposits, payloads):
+        matched = matchPayout(parseRelayPage(payload).rows, row.txHash)
+        if matched is None or not matched.user:
+            unresolved += 1
+            continue
+        resolved.append((row, matched))
+    users = sorted({matched.user for _row, matched in resolved})
+    byUser = fetchRelayUsers(session, users, limit, refresh, workers) if users else {}
+    originRows: list[dict[str, Any]] = []
+    recipientRows: list[dict[str, Any]] = []
+    originGroups: dict[str, set[str]] = defaultdict(set)
+    siblingGroups: dict[str, set[str]] = defaultdict(set)
+    siblingExtras: dict[str, set[str]] = defaultdict(set)
+    originTimes: dict[str, int] = {}
+    chains: Counter[int] = Counter()
+    seenPayout: set[tuple[str, str]] = set()
+    firstTs: dict[str, int] = {}
+    for deposit, matched in resolved:
+        originGroups[matched.user].add(deposit.toAddr)
+        originTimes[deposit.toAddr] = deposit.ts
+        if matched.originChainId is not None:
+            chains[matched.originChainId] += 1
+        originRows.append(
+            {
+                "account": deposit.toAddr,
+                "payoutTxHash": deposit.txHash,
+                "originUser": matched.user,
+                "originChainId": matched.originChainId,
+                "amountUsd": deposit.amountUsd,
+                "ts": _stamp(deposit.ts),
+            }
+        )
+        pages = list(byUser.get(matched.user, []))
+        if matched.payoutTxHash and all(item.payoutTxHash != matched.payoutTxHash for item in pages):
+            pages.append(matched)
+        for item in pages:
+            if not polygonPayout(item):
+                continue
+            key = (item.payoutTxHash, item.recipient)
+            if key in seenPayout:
+                continue
+            seenPayout.add(key)
+            recipientRows.append(
+                {
+                    "originUser": item.user,
+                    "recipient": item.recipient,
+                    "originChainId": item.originChainId,
+                    "destinationChainId": item.destinationChainId,
+                    "payoutTxHash": item.payoutTxHash,
+                    "amountUsd": item.amountUsd,
+                    "ts": _stamp(item.ts),
+                }
+            )
+            siblingExtras[item.user].add(item.recipient)
+            if item.ts is not None and item.recipient in traced and item.ts < splitTs:
+                siblingGroups[item.user].add(item.recipient)
+            if item.ts is not None:
+                previous = firstTs.get(item.recipient)
+                if previous is None or item.ts < previous:
+                    firstTs[item.recipient] = item.ts
+    allRecipients = {addr for group in siblingExtras.values() for addr in group}
+    outside = {addr for addr in allRecipients if addr not in suspicious}
+    afterSplit = {addr for addr in outside if addr in firstTs and firstTs[addr] >= splitTs}
+    sample = next((matched for _deposit, matched in resolved if matched.block and matched.recipient), None)
+    alchemyBlock = None
+    alchemyConfirmed = None
+    if sample is not None:
+        alchemyBlock, alchemyConfirmed = confirmSolverPayout(
+            session,
+            sample,
+            [deposit.toAddr for deposit, _matched in resolved],
+        )
+    relayHost = "api.relay.link"
+    return OriginLinks(
+        origins=_table(originRows, originsSchema, ["ts", "account"]),
+        recipients=_table(recipientRows, originRecipientSchema, ["ts", "originUser", "recipient"]),
+        originGroups=dict(originGroups),
+        siblingGroups=dict(siblingGroups),
+        siblingExtras=dict(siblingExtras),
+        originTimes=originTimes,
+        chains=dict(chains),
+        originsResolved=len(resolved),
+        originUsers=len(users),
+        unresolved=unresolved,
+        siblings=len(allRecipients),
+        siblingsOutside=len(outside),
+        siblingsAfterSplit=len(afterSplit),
+        relayCalls=session.stats.calls.get(relayHost, 0),
+        relayCacheHits=session.stats.cacheHits.get(relayHost, 0),
+        relayRateLimits=session.stats.rateLimits.get(relayHost, 0),
+        seconds=time.perf_counter() - started,
+        bridgeHubs=sorted(known),
+        deposits=len(deposits),
+        alchemyBlock=alchemyBlock,
+        alchemyPayoutConfirmed=alchemyConfirmed,
+    )

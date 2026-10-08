@@ -32,6 +32,17 @@ class DiscoveryConfig(BaseModel):
     hubMinCounterparties: int = 50
     fundingHops: int = 2
     minFundingUsd: float = 1
+    minBridgeDepositUsd: float = 100
+    # Relay solver. Other payout hubs are added when a sample tx resolves on Relay.
+    bridgeHubs: list[str] = Field(
+        default_factory=lambda: ["0xf70da97812cb96acdf810712aa562db8dfa3dbef"]
+    )
+    bridgeProbeLimit: int = 3
+    coTradeWindowSec: int = 10
+    minCoTrades: int = 2
+    relayRequestsPerSec: float = 1.0
+    relayPageLimit: int = 50
+    httpMaxWorkers: int = 8
 
 
 class StrategyConfig(BaseModel):

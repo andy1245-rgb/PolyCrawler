@@ -44,6 +44,8 @@ Parquet tables in `data/`:
 | `markets` | `marketId`, `question`, `tags`, `endDate`, `winner`, `volumeUsd` | Gamma API |
 | `fills` | `ts`, `account`, `marketId`, `outcome`, `side`, `size`, `price` | Data API `/trades?market=` |
 | `funding` | `ts`, `fromAddr`, `toAddr`, `amountUsd`, `txHash` | Polygon ERC-20 collateral transfers (Etherscan) |
+| `origins` | `account`, `payoutTxHash`, `originUser`, `originChainId`, `amountUsd`, `ts` | Relay `/requests/v2?hash=` on the first large bridge payout |
+| `originRecipients` | `originUser`, `recipient`, `originChainId`, `destinationChainId`, `payoutTxHash`, `amountUsd`, `ts` | Relay `/requests/v2?user=` (Polygon payouts) |
 | `prices` | `ts`, `marketId`, `outcome`, `price` | CLOB `prices-history` |
 
 Fetch order: pick markets (by tags / volume / date) → all their fills → funding for accounts that look interesting → prices for markets clusters traded.
@@ -66,13 +68,25 @@ An account is **suspicious** if it passes at least `minSignals` of these (defaul
 
 A counterparty is a **hub** when a page of its transfers (up to 1000) has at least `hubMinCounterparties` distinct collateral counterparties (default 50). The newest page is checked first. If that page is full and still under the threshold, the oldest page is checked too. A contract with real bytecode (not a tiny clone) that fills a 1000-row page is a hub even when those rows sit on a few pools. Hubs are deposit solvers, bridges, routers, and exchange hot wallets. They are not parents. `excludedFunders` is the same kind of skip, entered by hand.
 
-**Step 3 — Group into clusters.** Using transfers before `splitDate` only, link accounts that share a non-hub funder, share a non-hub cash-out destination, or send collateral to each other. If `fundingHops` is 2 (the default) and a funder is a non-hub EOA, also link accounts that share that funder's funder. A connected component with at least `minSuspiciousAccounts` suspicious accounts (default 2) is a cluster. The parent is the non-hub funder shared by the most suspicious accounts in the component. If the component is only tied by cash-outs or direct transfers, the parent is `component:<clusterId>`.
+**Step 3 — Trace bridge origins.** A Polygon deposit from a bridge solver is not the funder: the solver pays from inventory, and the sender is on the origin chain. For each traced account, take the earliest deposit of at least `minBridgeDepositUsd` (default 100) before `splitDate` from an address in `bridgeHubs` (the Relay solver, plus any other hub whose sample payout resolves on Relay). Look that payout tx up once with Relay `GET /requests/v2?hash=`. `user` is the origin wallet; `data.inTxs[0].chainId` is the origin chain.
 
-Then list every account that parent sent collateral to, including accounts funded after `splitDate`. Those siblings are what the strategy would copy.
+Public lookup stays on v2. `GET /requests/v3` only returns requests owned by your own integrator. v2's rate limit steps down from 1 Sep 2026 and the route is retired on 24 Nov 2026. HTTP 429 has no `Retry-After`; a body whose top-level `message` says you hit the rate limit is the same thing. `limit` must be ≤ 50. Further pages pass the opaque `continuation` cursor. Responses are cached under `data/raw/relay/`.
+
+Then one `user=` query per distinct origin wallet (paged) lists every request that wallet sent. Recipients whose payout lands on Polygon (chain 137) are siblings. One call per origin replaces one call per deposit.
+
+**Step 4 — Co-trading.** From fills before `splitDate`, link two suspicious accounts when they BUY the same `(marketId, outcome)` within `coTradeWindowSec` (default 10) at least `minCoTrades` times (default 2). Each fill is matched at most once. Accounts that are not suspicious are left out, so a market maker does not glue the cluster together. This step does not call an API.
+
+**Step 5 — Group into clusters.** Using evidence before `splitDate` only, link accounts that share a non-hub funder (`sharedFunder`), share a non-hub cash-out destination (`sharedCashOut`), send collateral to each other (`direct`), share an origin wallet (`sharedOrigin`), both appear in an origin's pre-split Polygon recipients (`originSibling`), or co-trade (`coTrade`). If `fundingHops` is 2 (the default) and a funder is a non-hub EOA, also link accounts that share that funder's funder. A connected component with at least `minSuspiciousAccounts` suspicious accounts (default 2) is a cluster. When one origin wallet covers at least two suspicious accounts in the component, that `originUser` is the parent. Otherwise the parent is the non-hub on-chain funder shared by the most suspicious accounts. If the component is only tied by cash-outs, direct transfers, or co-trades, the parent is `component:<clusterId>`.
+
+Then list every Polygon recipient of an origin parent, and every account an on-chain parent sent collateral to, including accounts funded after `splitDate`. Those siblings are what the strategy would copy.
+
+HTTP goes through one client: a per-host token bucket, retries with exponential backoff and jitter, the disk cache above, and `fetchMany` so independent calls share the limit instead of running as a naive sequential loop. Relay starts at `relayRequestsPerSec` (default 1) and widens the gap after a 429.
 
 Output:
 
 - `funding.parquet` — `ts`, `fromAddr`, `toAddr`, `amountUsd`, `txHash`
+- `origins.parquet` — `account`, `payoutTxHash`, `originUser`, `originChainId`, `amountUsd`, `ts`
+- `originRecipients.parquet` — `originUser`, `recipient`, `originChainId`, `destinationChainId`, `payoutTxHash`, `amountUsd`, `ts`
 - `parents.parquet` — `parent`, `clusterId`, `accountCount`, `suspiciousCount`, `totalProfitUsd`, `firstSeen`, `linkTypes`
 - `clusterAccounts.parquet` — `clusterId`, `account`, `linkType`
 
@@ -112,6 +126,15 @@ discovery:
   hubMinCounterparties: 50
   fundingHops: 2
   minFundingUsd: 1
+  minBridgeDepositUsd: 100
+  bridgeHubs:
+    - "0xf70da97812cb96acdf810712aa562db8dfa3dbef"
+  bridgeProbeLimit: 3
+  coTradeWindowSec: 10
+  minCoTrades: 2
+  relayRequestsPerSec: 1
+  relayPageLimit: 50
+  httpMaxWorkers: 8
 
 strategy:
   minNetUsd: 500
@@ -143,8 +166,9 @@ Python 3.12, `uv`, Pydantic, Polars, httpx, web3.py, Typer, pytest.
 ```
 src/polycrawler/
   config.py     # config model + loading + --set
+  http.py       # per-host limit, cache, retries, fetchMany
   fetch.py      # download → data/*.parquet
-  discovery.py  # suspicious accounts → funders → parents
+  discovery.py  # suspicious accounts → funders → origins → parents
   strategy.py   # net, entry, size, exit
   backtest.py   # replay, fills, PnL, summary
   sweep.py      # grid runs + ranking
@@ -166,6 +190,8 @@ Discovery stays in this repo for now. It only talks to the rest through `data/` 
 ## 11. Later (not in v0.2)
 
 Scored ranking instead of signal counts · funding hops past `fundingHops` · take profit / stop loss · order book fills · walk-forward validation · paper trading · live trading · dashboard · alerts · database.
+
+Relay's public v2 route is retired on 24 Nov 2026. v3 cannot look up arbitrary payout hashes, so origin tracing needs another source after that date.
 
 ## 12. Open questions
 

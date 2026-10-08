@@ -34,6 +34,15 @@ discovery:
   hubMinCounterparties: 50
   fundingHops: 2
   minFundingUsd: 1
+  minBridgeDepositUsd: 100
+  bridgeHubs:
+    - "0xf70da97812cb96acdf810712aa562db8dfa3dbef"
+  bridgeProbeLimit: 3
+  coTradeWindowSec: 10
+  minCoTrades: 2
+  relayRequestsPerSec: 1
+  relayPageLimit: 50
+  httpMaxWorkers: 8
 
 strategy:
   minNetUsd: 500

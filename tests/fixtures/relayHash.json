@@ -1,0 +1,43 @@
+{
+  "requests": [
+    {
+      "id": "0x97c1a2b8e5570ed5d4a60ead3851e55447569e6c9fe71d45f783045cb4900a18",
+      "status": "success",
+      "user": "0xd22e599505446dec378f9c161b741e6e722b2eda",
+      "recipient": "0x09D3273FA76282ce09F4F35a87d6F087C05f4E84",
+      "createdAt": "2026-02-15T23:04:17.337Z",
+      "data": {
+        "currency": "usdc.e",
+        "metadata": {
+          "currencyIn": {
+            "currency": {"chainId": 1, "symbol": "USDC"},
+            "amountUsd": "9929.329080"
+          },
+          "currencyOut": {
+            "currency": {"chainId": 137, "symbol": "USDC.e"},
+            "amountUsd": "9925.152641"
+          }
+        },
+        "inTxs": [
+          {
+            "chainId": 1,
+            "hash": "0xbd1d01ba5dafc57942a6947c082fc05d04346dd09edc5af22affda5c7b5f6069",
+            "timestamp": 1771196639
+          }
+        ],
+        "outTxs": [
+          {
+            "chainId": 137,
+            "hash": "0x7244132470aa5b71c8b797b1424629b9185f06a7ac84710937f33a7d40eb3465",
+            "timestamp": 1771196661,
+            "block": 83000000
+          }
+        ]
+      }
+    }
+  ],
+  "continuation": null,
+  "deprecation": {
+    "message": "GET /requests/v2 is deprecated. Relay reduces the v2 rate limit in stages from September 1, 2026. Relay retires v2 on November 24, 2026."
+  }
+}
