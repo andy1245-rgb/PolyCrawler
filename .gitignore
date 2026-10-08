@@ -38,7 +38,8 @@ agents.md
 # Local data
 *.db
 *.sqlite3
-data/
+/data/
+/runs/
 
 # Cursor assets (local workspace images)
 assets/
