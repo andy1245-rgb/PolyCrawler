@@ -1,0 +1,115 @@
+splitDate: 2026-03-01
+
+fetch:
+  eventSlugs:
+    # military
+    - nasrallah-remains-leader-of-hezbollah-through-october-31  # $0.76M, under the $1M floor
+    - will-israel-invade-lebanon-in-september
+    - israel-strike-on-iranian-nuclear-facility-in-2024
+    - will-israel-invade-syria-in-2024
+    - pakistan-military-strike-on-india-by-friday
+    - thailand-strikes-cambodia-by-friday
+    - houthi-strike-on-israel-by-august-31
+    - us-strikes-yemen-by-september-30
+    - us-anti-cartel-ground-operation-in-mexico-by-january-31
+    # diplomacy
+    - israel-x-hezbollah-ceasefire-in-2024
+    - russia-x-ukraine-ceasefire-in-2024
+    - trump-x-ukraine-mineral-deal-signed-before-may
+    - russia-x-ukraine-ceasefire-before-july
+    - israel-x-hamas-ceasefire-before-august
+    - russia-x-ukraine-ceasefire-before-october
+    - when-will-israel-announce-ceasefire
+    - russia-x-ukraine-ceasefire-in-2025
+    - russia-x-ukraine-ceasefire-by-april-30-2026
+    # leaders
+    - will-assad-remain-president-of-syria-through-2024
+    - yoon-out-as-president-of-south-korea-before-april
+    - zelenskyy-out-as-ukraine-president-before-july
+    - xi-jinping-out-in-2025
+    - will-china-invade-taiwan-in-2025
+    - starmer-out-in-2025
+    - will-china-invade-taiwan-by-june-30-2026
+    - putin-out-as-president-of-russia-by-june-30
+    # ukraine battlefield
+    - will-russia-capture-pokrovsk-by
+    - will-russia-capture-kupiansk-by
+    - will-russia-capture-kostyantynivka-by
+    # awards and rankings
+    - who-will-hbo-doc-identify-as-satoshi
+    - time-2024-person-of-the-year
+    - grammys-album-of-the-year-2025
+    - oscars-best-picture
+    - nobel-peace-prize-winner-2025
+    - top-spotify-artist-2025-146
+    - 1-searched-person-on-google-this-year
+    - game-awards-game-of-the-year-2025
+    - time-2025-person-of-the-year
+    - grammys-album-of-the-year-winner
+    - oscars-2026-best-picture-winner
+    # policy announcements
+    - will-biden-drop-out-of-presidential-race
+    - tiktok-banned-in-the-us-before-may-2025
+    - who-will-acquire-tiktok
+    - when-will-the-government-shutdown-end-545
+    - tiktok-sale-announced-in-2025
+    # tech and product launches
+    - will-tesla-launch-a-driverless-robtotaxi-service-before-july
+    - when-will-gpt-5-be-released
+    - how-much-will-iphone-17-cost
+    - openai-browser-by-october-31
+    - gemini-3pt0-released-by
+    - what-day-will-openai-release-a-new-frontier-model
+    - gpt-5pt5-released-by
+    - gpt-5pt6-released-by
+    # entertainment
+    - who-will-win-the-beast-games  # $0.97M, just under the $1M floor
+    - taylor-swift-and-travis-kelce-engaged-in-2025  # $0.39M, documented case
+    - who-will-die-in-stranger-things-season-5
+    - who-will-win-the-beast-games-season-2-966
+    # investigation announcement
+    - which-crypto-company-will-zachxbt-expose-for-insider-trading
+    # appointments
+    - who-will-trump-nominate-for-treasury-secretary
+    - who-will-be-trumps-defense-secretary
+    - who-will-be-trumps-attorney-general
+    - who-will-trump-announce-as-next-fed-chair-before-july
+    - who-will-be-confirmed-as-fed-chair
+    # courts
+    - trump-sentenced-to-how-much-prison-time
+    - how-many-constitutional-court-justices-will-vote-for-yoons-impeachment
+    - yoon-insurrection-case-prison-sentence
+    # fed control
+    - fed-interest-rates-july-2024
+    - fed-interest-rates-december-2024
+    - fed-decision-in-march
+    # elections control
+    - texas-presidential-election-winner
+    - which-party-wins-most-seats-in-canadian-election
+    - prime-minister-of-japan-after-snap-election
+  marketTags: []
+  minMarketVolumeUsd: 0
+  fromDate: 2024-01-01
+  closedOnly: false
+  dataDir: data
+
+discovery:
+  maxAccountAgeDays: 14
+  maxMarketsTraded: 15
+  maxBuyPrice: 0.3
+  minBetUsd: 1000
+  minSignals: 4
+  minSuspiciousAccounts: 2
+  excludedFunders: []
+  hubMinCounterparties: 50
+  fundingHops: 2
+  minFundingUsd: 1
+
+strategy:
+  minNetUsd: 500
+  maxEntryPrice: 0.5
+  mirrorPct: 1.0
+  maxPositionUsd: 1000
+  exitMode: followCluster
+  delaySec: 30
+  slippageBps: 50
