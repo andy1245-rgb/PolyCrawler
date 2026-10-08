@@ -1,0 +1,42 @@
+splitDate: 2026-03-01
+
+fetch:
+  eventSlugs:
+    # Iran military (Feb 2026 strike cluster + follow-on markets)
+    - us-strikes-iran-by
+    - us-next-strikes-iran-on-843
+    - usisrael-strikes-iran-by
+    - khamenei-out-as-supreme-leader-of-iran-by-february-28
+    - khamenei-out-as-supreme-leader-of-iran-by-march-31
+    - us-x-iran-ceasefire-by
+    - will-the-iranian-regime-fall-by-march-31
+    - israel-strike-on-iran-on
+    # Venezuela (Jan 2026 Maduro operation)
+    - maduro-out-in-2025
+    - us-forces-in-venezuela-by
+    - will-the-us-invade-venezuela-in-2025
+    - trump-invokes-war-powers-against-venezuela-by
+    - us-operation-to-capture-maduro-in-2025
+  marketTags: []
+  minMarketVolumeUsd: 0
+  fromDate: 2024-01-01
+  closedOnly: false
+  dataDir: data
+
+discovery:
+  maxAccountAgeDays: 14
+  maxMarketsTraded: 15
+  maxBuyPrice: 0.3
+  minBetUsd: 1000
+  minSignals: 4
+  minSuspiciousAccounts: 2
+  excludedFunders: []
+
+strategy:
+  minNetUsd: 500
+  maxEntryPrice: 0.5
+  mirrorPct: 1.0
+  maxPositionUsd: 1000
+  exitMode: followCluster
+  delaySec: 30
+  slippageBps: 50

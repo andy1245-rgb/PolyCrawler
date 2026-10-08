@@ -31,6 +31,7 @@ marketSchema = {
     "tags": pl.List(pl.String),
     "endDate": pl.Datetime(time_unit="us", time_zone="UTC"),
     "winner": pl.String,
+    "resolvedAt": pl.Datetime(time_unit="us", time_zone="UTC"),
     "volumeUsd": pl.Float64,
     "clobTokenIds": pl.List(pl.String),
     "outcomes": pl.List(pl.String),
@@ -137,13 +138,17 @@ def normalizeMarket(market: dict[str, Any], eventSlug: str, tags: list[str]) -> 
     volume = market.get("volumeNum")
     if volume is None:
         volume = market.get("volume")
+    winner = winnerFrom(outcomes, prices)
+    # endDate is often the whole event's end, not when this market resolved.
+    resolvedAt = parseTime(market.get("umaEndDate") or market.get("closedTime")) if winner else None
     return {
         "marketId": str(market["conditionId"]).lower(),
         "eventSlug": eventSlug,
         "question": str(market.get("question") or ""),
         "tags": list(tags),
         "endDate": parseTime(market.get("endDate")),
-        "winner": winnerFrom(outcomes, prices),
+        "winner": winner,
+        "resolvedAt": resolvedAt,
         "volumeUsd": float(volume or 0),
         "clobTokenIds": parseJsonList(market.get("clobTokenIds")),
         "outcomes": outcomes,

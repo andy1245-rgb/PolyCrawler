@@ -1,0 +1,38 @@
+[
+  {
+    "type": "REDEEM",
+    "timestamp": 500,
+    "conditionId": "0xccc",
+    "side": "",
+    "size": 1,
+    "outcome": "Yes",
+    "transactionHash": "0xredeem"
+  },
+  {
+    "type": "TRADE",
+    "timestamp": 2000,
+    "conditionId": "0xBBB",
+    "side": "BUY",
+    "size": 10,
+    "outcome": "Yes",
+    "transactionHash": "0x2"
+  },
+  {
+    "type": "TRADE",
+    "timestamp": 1000,
+    "conditionId": "0xaaa",
+    "side": "BUY",
+    "size": 4,
+    "outcome": "No",
+    "transactionHash": "0x1"
+  },
+  {
+    "type": "TRADE",
+    "timestamp": 9999999999,
+    "conditionId": "0xddd",
+    "side": "BUY",
+    "size": 1,
+    "outcome": "Yes",
+    "transactionHash": "0xfuture"
+  }
+]
