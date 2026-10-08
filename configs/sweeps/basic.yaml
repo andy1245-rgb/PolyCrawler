@@ -1,0 +1,12 @@
+name: basic
+objective: medianEventReturn
+minTrades: 20
+minEvents: 3
+grid:
+  copyRule: [all, largestPerEvent]
+  maxEntryPrice: [0.2, 0.35, 0.5, 0.7]
+  minNetUsd: [500, 1000, 5000]
+  delaySec: [30, 300, 3600]
+  sizing: [fixed, mirrorPct]
+  exitMode: [followCluster, holdToResolution]
+  slippageBps: [0, 50, 200]
