@@ -29,6 +29,9 @@ class DiscoveryConfig(BaseModel):
     minSignals: int = 4
     minSuspiciousAccounts: int = 2
     excludedFunders: list[str] = Field(default_factory=list)
+    hubMinCounterparties: int = 50
+    fundingHops: int = 2
+    minFundingUsd: float = 1
 
 
 class StrategyConfig(BaseModel):
