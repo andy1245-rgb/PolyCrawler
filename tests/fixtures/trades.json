@@ -1,0 +1,24 @@
+[
+  {
+    "proxyWallet": "0x480D013bf6665fb174FB7Ec6ea677cFC8140f219",
+    "side": "BUY",
+    "conditionId": "0x4b343a91e4892e769d1f6bba3b88239e49311ccbd0e4be2fa165a8c2935a37b1",
+    "size": 500,
+    "price": 0.6483,
+    "timestamp": 1741310607,
+    "outcome": "UIC",
+    "outcomeIndex": 1,
+    "transactionHash": "0x97528a20e26d9fe03e1899e2abbc8369d25993c8e3496547a75c556e4caa4364"
+  },
+  {
+    "proxyWallet": "0x29c0a89b11111111111111111111111111111111",
+    "side": "BUY",
+    "conditionId": "0x4b343a91e4892e769d1f6bba3b88239e49311ccbd0e4be2fa165a8c2935a37b1",
+    "size": 415,
+    "price": 0.35,
+    "timestamp": 1741310607,
+    "outcome": "Valparaiso",
+    "outcomeIndex": 0,
+    "transactionHash": "0x97528a20e26d9fe03e1899e2abbc8369d25993c8e3496547a75c556e4caa4364"
+  }
+]

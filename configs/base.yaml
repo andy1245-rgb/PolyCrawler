@@ -1,0 +1,29 @@
+splitDate: 2026-01-01
+
+fetch:
+  eventSlugs: []
+  marketTags:
+    - politics
+    - geopolitics
+  minMarketVolumeUsd: 100000
+  fromDate: 2024-01-01
+  closedOnly: true
+  dataDir: data
+
+discovery:
+  maxAccountAgeDays: 14
+  maxMarketsTraded: 5
+  maxBuyPrice: 0.3
+  minBetUsd: 1000
+  minSignals: 4
+  minSuspiciousAccounts: 2
+  excludedFunders: []
+
+strategy:
+  minNetUsd: 500
+  maxEntryPrice: 0.5
+  mirrorPct: 1.0
+  maxPositionUsd: 1000
+  exitMode: followCluster
+  delaySec: 30
+  slippageBps: 50

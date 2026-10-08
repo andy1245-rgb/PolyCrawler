@@ -1,0 +1,24 @@
+{
+  "slug": "cbb-valp-uic-2025-03-06",
+  "title": "Valparaiso vs. UIC",
+  "closed": true,
+  "volume": 500,
+  "tags": [
+    {"id": "1", "label": "Sports", "slug": "sports"},
+    {"id": "100639", "label": "Basketball", "slug": "basketball"}
+  ],
+  "markets": [
+    {
+      "conditionId": "0x4b343a91e4892e769d1f6bba3b88239e49311ccbd0e4be2fa165a8c2935a37b1",
+      "question": "Valparaiso vs. UIC",
+      "slug": "cbb-valp-uic-2025-03-06",
+      "endDate": "2025-03-06T00:00:00Z",
+      "closed": true,
+      "volume": "500",
+      "volumeNum": 500,
+      "outcomes": "[\"Valparaiso\", \"UIC\"]",
+      "outcomePrices": "[\"1\", \"0\"]",
+      "clobTokenIds": "[\"64047736874726639919731643736077990317049796234459844044621952640194263137463\", \"999\"]"
+    }
+  ]
+}
