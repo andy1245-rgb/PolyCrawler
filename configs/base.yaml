@@ -15,6 +15,7 @@ discovery:
   maxMarketsTraded: 5
   maxBuyPrice: 0.3
   minBetUsd: 1000
+  maxFlagLeadHours: 168
   minSignals: 4
   minSuspiciousAccounts: 2
   excludedFunders: []
@@ -27,6 +28,7 @@ discovery:
   bridgeProbeLimit: 3
   coTradeWindowSec: 10
   minCoTrades: 2
+  minCoTradeMarkets: 2
   relayRequestsPerSec: 1
   relayPageLimit: 50
   httpMaxWorkers: 8

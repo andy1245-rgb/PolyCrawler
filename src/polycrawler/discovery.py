@@ -49,12 +49,14 @@ suspiciousSchema = {
     "avgBuyPrice": pl.Float64,
     "firstBuyTs": pl.Datetime(time_unit="us", time_zone="UTC"),
     "firstTradeTs": pl.Datetime(time_unit="us", time_zone="UTC"),
+    "leadHours": pl.Float64,
     "accountAgeDays": pl.Float64,
     "marketsTraded": pl.Int64,
     "isNew": pl.Boolean,
     "isFocused": pl.Boolean,
     "isLongshot": pl.Boolean,
     "isBig": pl.Boolean,
+    "isLate": pl.Boolean,
     "signalCount": pl.Int64,
     "suspicious": pl.Boolean,
     "profitUsd": pl.Float64,
@@ -128,7 +130,9 @@ def aggregateBets(
     splitDate: date,
 ) -> pl.DataFrame:
     cutoff = splitCutoff(splitDate)
-    resolved = resolvedMarkets(markets, splitDate).select(["marketId", "winner"])
+    resolved = resolvedMarkets(markets, splitDate).select(
+        ["marketId", "winner", pl.coalesce("resolvedAt", "endDate").alias("resolvedTs")]
+    )
     buys = fills.filter((pl.col("side") == "BUY") & (pl.col("ts") < cutoff))
     buys = buys.join(resolved, on="marketId", how="inner")
     if buys.height == 0:
@@ -141,6 +145,7 @@ def aggregateBets(
                 "buyShares": pl.Float64,
                 "avgBuyPrice": pl.Float64,
                 "firstBuyTs": pl.Datetime(time_unit="us", time_zone="UTC"),
+                "resolvedTs": pl.Datetime(time_unit="us", time_zone="UTC"),
                 "winner": pl.String,
                 "won": pl.Boolean,
             }
@@ -151,6 +156,7 @@ def aggregateBets(
             (pl.col("size") * pl.col("price")).sum().alias("buyUsd"),
             pl.col("size").sum().alias("buyShares"),
             pl.col("ts").min().alias("firstBuyTs"),
+            pl.col("resolvedTs").first().alias("resolvedTs"),
             pl.col("winner").first().alias("winner"),
         )
         .with_columns(
@@ -327,12 +333,20 @@ def loadActivity(
 
 def withSignals(frame: pl.DataFrame, discovery: DiscoveryConfig) -> pl.DataFrame:
     age = (pl.col("firstBuyTs") - pl.col("firstTradeTs")).dt.total_seconds() / 86400.0
+    lead = (pl.col("resolvedTs") - pl.col("firstBuyTs")).dt.total_seconds() / 3600.0
+    late = (
+        pl.lit(True)
+        if discovery.maxFlagLeadHours is None
+        else (lead <= discovery.maxFlagLeadHours).fill_null(False)
+    )
     scored = frame.with_columns(
         accountAgeDays=age,
+        leadHours=lead,
         isNew=(age <= discovery.maxAccountAgeDays).fill_null(False),
         isFocused=pl.col("marketsTraded") <= discovery.maxMarketsTraded,
         isLongshot=pl.col("avgBuyPrice") <= discovery.maxBuyPrice,
         isBig=pl.col("buyUsd") >= discovery.minBetUsd,
+        isLate=late,
     )
     scored = scored.with_columns(
         signalCount=(
@@ -341,8 +355,16 @@ def withSignals(frame: pl.DataFrame, discovery: DiscoveryConfig) -> pl.DataFrame
             + pl.col("isLongshot").cast(pl.Int64)
             + pl.col("isBig").cast(pl.Int64)
         )
+    ).with_columns(
+        # Hard gate, not a signal: on date-ladder events speculators also buy
+        # the winning date late, so counting isLate just inflates the pool.
+        # As a gate it cuts the long-lead speculators while every labeled
+        # insider kept late=True (research/leadGate.md).
+        suspicious=pl.col("signalCount") >= discovery.minSignals,
     )
-    return scored.with_columns(suspicious=pl.col("signalCount") >= discovery.minSignals)
+    if discovery.maxFlagLeadHours is not None:
+        scored = scored.with_columns(suspicious=pl.col("suspicious") & pl.col("isLate"))
+    return scored
 
 
 def scoreCandidates(
@@ -463,6 +485,7 @@ def signalText(row: dict[str, Any] | None) -> str:
             ("focused", row["isFocused"]),
             ("longshot", row["isLongshot"]),
             ("big", row["isBig"]),
+            ("late", row["isLate"]),
         )
         if flag
     ]

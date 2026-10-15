@@ -10,9 +10,21 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
+import httpcore
 import httpx
 
 _secret = re.compile(r"(/v2/)[^/\s\"']+|(apikey=)[^&\s]+", re.IGNORECASE)
+# DNS blips ("Temporary failure in name resolution") and dropped connections
+# are not HTTP responses. A short attempt budget kills a multi-hour run.
+_transient = (
+    httpx.TimeoutException,
+    httpx.TransportError,
+    httpcore.NetworkError,
+    httpcore.TimeoutException,
+    httpcore.ProtocolError,
+    TimeoutError,
+    OSError,
+)
 
 
 @dataclass
@@ -103,12 +115,15 @@ def rateLimitMessage(payload: Any) -> bool:
 
 
 class HttpSession:
-    def __init__(self, client: httpx.Client, hostRates: dict[str, float] | None = None, defaultRate: float = 0.0, dataDir: str | None = None, maxAttempts: int = 6, clock: Callable[[], float] | None = None, sleep: Callable[[float], None] | None = None, rng: Callable[[], float] | None = None) -> None:
+    def __init__(self, client: httpx.Client, hostRates: dict[str, float] | None = None, defaultRate: float = 0.0, dataDir: str | None = None, maxAttempts: int = 6, connectAttempts: int = 30, connectCap: float = 30.0, limiterMaxInterval: float = 30.0, clock: Callable[[], float] | None = None, sleep: Callable[[float], None] | None = None, rng: Callable[[], float] | None = None) -> None:
         self.client = client
         self.hostRates = dict(hostRates or {})
         self.defaultRate = defaultRate
         self.dataDir = dataDir
         self.maxAttempts = maxAttempts
+        self.connectAttempts = connectAttempts
+        self.connectCap = connectCap
+        self.limiterMaxInterval = limiterMaxInterval
         self.clock = clock or time.monotonic
         self.sleep = sleep or time.sleep
         self.rng = rng or random.random
@@ -125,7 +140,7 @@ class HttpSession:
         with self.lock:
             found = self.limiters.get(host)
             if found is None:
-                found = HostLimiter(rate, self.clock, self.sleep)
+                found = HostLimiter(rate, self.clock, self.sleep, self.limiterMaxInterval)
                 self.limiters[host] = found
             return found
 
@@ -185,16 +200,22 @@ class HttpSession:
     def _fetchLimited(self, url: str, params: dict[str, Any], body: Any, host: str) -> Any:
         delay = 0.5
         last = "request failed"
-        for _attempt in range(self.maxAttempts):
+        attempt = 0
+        connectFails = 0
+        while attempt < self.maxAttempts:
             limiter = self.limiterFor(url)
             if limiter is not None:
                 limiter.acquire()
             try:
                 response = self.client.get(url, params=params) if body is None else self.client.post(url, json=body)
-            except (httpx.TimeoutException, httpx.TransportError) as exc:
+            except _transient as exc:
+                connectFails += 1
                 last = redactSecrets(str(exc))[:300]
-                self.sleep(delay * (1.0 + self.rng() * 0.25))
-                delay *= 2
+                if connectFails >= self.connectAttempts:
+                    break
+                print(f"connect retry {connectFails} {host}: {last}", flush=True)
+                self._pause(delay)
+                delay = min(self.connectCap, delay * 2)
                 continue
             self.stats.add("calls", host)
             payload = _readJson(response)
@@ -205,8 +226,11 @@ class HttpSession:
                     if limiter is not None:
                         limiter.penalize()
                 last = redactSecrets(f"{response.status_code} {url}")[:300]
-                self.sleep(delay * (1.0 + self.rng() * 0.25))
-                delay *= 2
+                attempt += 1
+                if attempt >= self.maxAttempts:
+                    break
+                self._pause(delay)
+                delay = min(self.connectCap, delay * 2)
                 continue
             if response.status_code >= 400:
                 raise RuntimeError(redactSecrets(f"{response.status_code} {url} {response.text[:300]}"))
@@ -216,6 +240,9 @@ class HttpSession:
                 limiter.relax()
             return payload
         raise RuntimeError(last)
+
+    def _pause(self, delay: float) -> None:
+        self.sleep(delay * (1.0 + self.rng() * 0.25))
 
 
 def _readJson(response: httpx.Response) -> Any:

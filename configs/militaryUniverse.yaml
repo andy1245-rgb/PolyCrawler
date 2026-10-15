@@ -1,0 +1,17 @@
+# Military / strike-timing sibling events left out of the 72-event universe
+# (see research/eventUniverse.md and research/freshAccountSignal.md).
+# Fetched into data/universe so discovery can run across the combined tape.
+splitDate: 2026-01-01
+
+fetch:
+  dataDir: data/universe
+  eventSlugs:
+    - us-x-iran-permanent-peace-deal-by
+    - us-x-iran-ceasefire-extended-by
+    - israel-x-hezbollah-ceasefire-by
+    - israel-strikes-iran-by-january-9-2026
+    - israel-strikes-iran-by-january-16-2026-418
+    - israel-strikes-iran-by-january-31-2026
+    - israel-strikes-iran-by-february-28-2026
+    - israel-strikes-iran-by-march-31-2026
+    - us-strikes-iran-by-october-3

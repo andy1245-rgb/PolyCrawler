@@ -26,6 +26,10 @@ class DiscoveryConfig(BaseModel):
     maxMarketsTraded: int = 5
     maxBuyPrice: float = 0.3
     minBetUsd: float = 1000
+    # Flag bet must sit within this many hours of resolution; None disables
+    # the gate. Both labeled verdict samples put every insider/likely insider
+    # under 68h; as a hard gate it cuts long-lead speculators (research/leadGate.md).
+    maxFlagLeadHours: int | None = 168
     minSignals: int = 4
     minSuspiciousAccounts: int = 2
     excludedFunders: list[str] = Field(default_factory=list)
@@ -40,6 +44,8 @@ class DiscoveryConfig(BaseModel):
     bridgeProbeLimit: int = 3
     coTradeWindowSec: int = 10
     minCoTrades: int = 2
+    # One shared market is enough for a market maker to glue strangers together.
+    minCoTradeMarkets: int = 2
     relayRequestsPerSec: float = 1.0
     relayPageLimit: int = 50
     httpMaxWorkers: int = 8
