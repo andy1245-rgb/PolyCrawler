@@ -385,8 +385,10 @@ tape** (daily report restarts it):
   ~150-240 trades — candidate for the live watch rule pending more OOS.
 
 ### session 2026-10-15 (later): monitor + dirs routing + fingerprint hardening
-- The §9 "git note" above is stale — b153ae3 landed the dataDirs routing,
-  parity tool and on-chain analysis.
+- The "git note" paragraph of the pre-ec6131f tree (dataDirs plumbing +
+  parity tool "uncommitted at session end") was removed by ec6131f itself:
+  b153ae3 had already landed the dataDirs routing, parity tool and on-chain
+  analysis, so the note read as stale the moment it was reviewed.
 - `scripts/research/orderBurstMonitor.py` (new): the promised monitor, a
   single-purpose cron job. It does NOT pull: it polls
   `data/raw/dune/onchainBuy_*.csv` until the puller's own
@@ -409,4 +411,153 @@ tape** (daily report restarts it):
   before the resume; remaining days pulling now via the external background
   process, monitor above fires the analysis when it exits); OOS fetch
   (`configs/oosFetch.yaml`) re-attempted in background.
+
+### session 2026-10-15 (later still): two review passes applied (C1–C6)
+The bb645e9..ec6131f diff went through two reviews (correctness + design);
+both approved fixes are now in, one commit each:
+- **C1/c87cbfe** — puller `writeCsv()` writes through `<path>.tmp` +
+  `os.replace()` (no more half-written day caches read mid-pull); main()
+  publishes the resolved sample plan to `data/raw/dune/samplePlan.json`
+  once at startup.
+- **C2/6337c3d** — monitor hardening: plan prefers
+  `samplePlan.json`, then falls back to the puller's `sampleDays()`; future
+  days are filtered out (the old code waited on not-yet-elapsed days →
+  guaranteed timeout mid-month); run-once flock on
+  `data/raw/dune/orderBurstMonitor.lock` (held → exit 0 with a note);
+  completion sentinel `logs/orderBurstAnalysis_<planHash>.done`
+  (planHash = sha1 over the sorted FULL plan — stable across a day, re-fires
+  only when the puller's plan grows a month); `--per-month` default imports
+  the puller's `PER_MONTH` instead of a hardcode; the sys.argv swap hack is
+  gone (analysis `main(dir_=...)`); tee log opens with an explicit
+  `=== orderBurstAnalysis started … ===` line.
+- **C3/4b421c8** — `scripts/research/researchData.py` (new) is the single
+  owner of `RESEARCH_FETCH`, `researchDataDirs()`, the military slug tuple,
+  `militaryMarketsFrame()`; duneOrderBurst/engineParity/entrySweep/
+  orderBurstOnchainAnalysis import it by-path and their duplicates are
+  deleted (entrySweep's `militaryMarketsTable` replaced by the shared frame,
+  engineParity no longer loads duneOrderBurst just for the slugs).
+- **C4/9bc2f73** — analysis `loadLegs` parses each day CSV once (was twice
+  for a height check; the day counts now come from that single pass), and
+  exits with a clear message when no day has legs instead of polars' concat
+  ValueError; `universeFills()` lost its unused `militaryIds` parameter.
+- **C5/ecab270** — monitor test repairs landed with C2 (they were coupled:
+  the elapsed-day filter invalidated the old equality assertion): the `or
+  True` tautology is gone, the sampling contract is pinned
+  (`samplePlanDays()[0] == 2023-10-11`, recorded at commit time, live from
+  `sampleDays(seed=7)`, hermetic via PLAN_PATH monkeypatch), plus a plan-file
+  preference test. entrySweep `dataFingerprint` takes ONE `stat()` per file;
+  status.md's self-referential "git note is stale" line now points at the
+  paragraph ec6131f removed.
+- **C6/3627a5f** — scoped ruff cleanup: entrySweep + engineParity only
+  (`from datetime import UTC`, stale `# noqa: E402` dropped; entrySweep's
+  unused `json` import and dead `cols` variable were dropped with the C3
+  extraction). Deliberately NO repo-wide pass — dune scripts still carry
+  UP017s (monitor/analysis/oosTransport lost theirs with the 2026-10-15
+  re-review follow-ups).
+- Full suite after all of the above: 108 passed (`uv run pytest`).
+- Re-review correction (the re-review #18 ran; heading above enumerates
+  C1–C6, no C7): the C4 "no legs" exit was broken for the all-header-only
+  case — pl.concat raised its ValueError before the guard — and is now
+  fixed inside loadLegs; and the oosTransport `RESEARCH_FETCH` resolution
+  regression (`esw.` no longer re-exports it) was caught in the same
+  re-review. Both are fixed by follow-up commits.
+
+### oosTransport: OOS pull cannot grade the floor-ranked candidate cells (2026-10-15, later)
+
+- Data: `configs/oosFetch.yaml` → `data/oos`: 484,220 fills (306k buys),
+  141 markets / 60 resolved military slugs, 57,478 accounts,
+  2024-05-29 → 2026-09-16. Event scope applied exactly as in-sample: the
+  sweep's own `militaryMarketsTable` keyword filter over the fetched slug set
+  (58/60 slugs carry ≥1 sweep entry); **only 1/60 slugs overlaps the
+  in-sample universe** (`nasrallah-...-through-october-31`) → clean
+  event-scope OOS. Sweep cache built by the same entrySweep machinery
+  (fingerprint `f2bbde9a79`, `data/entrySweep/entries_v2_f2bbde9a79.parquet`);
+  480-cell grid: `scripts/research/entrySweep.py --data-dir data/oos --grid
+  configs/sweeps/oosEntryGrid.yaml` (log `logs/oosEntrySweep.log`);
+  neighborhood + delay-realistic: `scripts/research/oosTransport.py` (new,
+  thin wrapper importing entrySweep internals — the CLI could not do the
+  age > 1 lower gate or drop no-landed triggers; log `logs/oosTransport.log`).
+- Verdict framework (prestated): PASS a candidate $X/≤0.35 cell if OOS p5 > 0
+  AND P(>0) ≥ 85% AND retReal-scaled > 0 AND single-event share < 60% with
+  n ≥ 20 events (or accounts); FAIL = publishable transport falsification;
+  INCONCLUSIVE when the pull is too thin for p5 to mean anything.
+- Candidate track (≤ 3 markets, age ≤ 5d; all values below the 20-entry
+  bootstrap floor, so `evaluate()` refuses to emit p5/P(>0) — raw means only):
+
+  | cell | n | evts | accts | retReal | winRate | topEvShare | delay-realistic* |
+  |---|---|---|---|---|---|---|---|
+  | $5k/≤0.35 | 11 | 8 | 11 | +0.246 | .36 | 96% | n=5, +1.06, 5 evts |
+  | $7.5k/≤0.35 | 9 | 7 | 9 | +0.124 | .33 | 220% | — |
+  | $10k/≤0.35 | 8 | 6 | 8 | +0.264 | .38 | 116% (top loss > total) | n=3, +1.25, 3 evts |
+  | $12.5k/≤0.35 | 5 | 4 | 5 | +0.356 | .40 | 137% | — |
+  | $5k–$10k/≤0.30 | 10 / 7 | 7 / 5 | | +0.371 / +0.445 | | 70% / 79% | |
+  | $5k–$10k/≤0.40 | 15 / 11 | 9 / 8 | | +0.226 / +0.154 | | 123% / 145% | |
+  | **age 2-5d, any $X ≤0.30–0.40** | **1** | 1 | 1 | −1.000 | | | empty |
+
+  *delay-realistic (computed cheaply from the entries cache + a rebuilt
+  next-print tape in oosTransport): entries with NO buy print within 300s of
+  the trigger are DROPPED (position never opens; entrySweep's retReal falls
+  back to the trigger price instead), landed ones priced at that print +
+  50bps. Overall landed300 across all 199,538 OOS burst triggers is 49.8%;
+  27–57% inside the candidate track — the whole-burst return is not
+  executable in this regime, and the $5k line loses 6 of 11 entries to it.
+- **Verdict: INCONCLUSIVE on every candidate cell.** nDisclaimer: the 60-slug
+  OOS fetch yields only 8 events with a legal ≥$5k ≤0.35 ≤3-market burst
+  (≤3 events at $10k) — the 20-event floor is unreachable, so the bootstrapped
+  p5 floor is undefined by construction, not merely weak. Single-event share
+  is ≥70% descriptively wherever a top event is measurable. What would fix
+  it: ~8/60 OOS events carry a ≥$5k-legal burst, so ≥20 events needs
+  ~150–250 additional resolved military slugs (event count, not accounts),
+  ideally filtered to books that were liquid at burst time (landed300%).
+- The age-2-5d restriction — the in-sample candidate's key gate — has an
+  essentially EMPTY OOS population (n=1, a single loser, across every
+  size/price cell): big fresh bursts sit on day-0/1 accounts in the OOS era.
+  The in-sample 2-5d restriction currently has no OOS mass to transport onto.
+- Strict-PASS count over the whole 480-cell OOS grid (events ≥ 20): **0**.
+  The 219 gradeable cells all fail p5 > 0 + P(≥85%): best gradeable p5 is
+  $2k/≤0.65/age1/1mkt (p5 +0.175, P ~50%, 29 events, h1 negative). Every
+  gradeable ≤0.35 cell is negative-leaning: $2k/≤0.35/5d/3mkt n=37, 22 evts,
+  ret −0.150, p5 −0.634, P(>0) 28%; $1k line p5 −0.603, P 33%; $500 line
+  p5 −0.482, P 39%. h1/h2 split is wrong-signed for the shipped expectation
+  (h1 −0.31..−0.50 vs h2 +0.01..+0.26 — the OOS edge, if any, postdates the
+  in-sample half). Directional read: at ≤ 0.35 the OOS tape gives no
+  gradeable positive cell at any size; the floor-ranked transport is
+  unconfirmed and leaning negative — a partial falsification of the floor
+  ranking's transport (the $10k p5 +0.39..+0.57 in-sample cells can't even be
+  reproduced as populations OOS).
+- Cells frozen: none. The shipped $5k/≤0.35/5d/3mkt line keeps its in-sample
+  grade; no change to the live watcher rule. Next OOS pull should target
+  event count (≥150 resolved slugs) before re-attempting the $10k verdict.
+  (Data observation recorded as such: age-2-5d being empty and big OOS bursts
+  sitting on day-0/1 accounts is a property of the OOS tape, not a rule
+  change — see the older-noted bullets above.)
+
+### 9.1 oosTransport follow-up: oosExpansion roster staged (2026-10-15, later still)
+
+- Discovery: crawled gamma `/events` by tag (closed=true, volume-desc, 24
+  military-adjacent tag_slugs through the repo's own `HttpSession` pacing
+  adapter at 4 req/s with 429 penalize, 79 successful 100-event pages + deep-
+  pagination-wall retries on a few tags), filtered slugs with the
+  SHIPPED 15-keyword military tuple from `scripts/research/researchData.py`,
+  kept resolved-only closed events with volume ≥ $20k, and excluded every
+  slug already in `data/` (13), `data/universe` (81), `data/oos` (60) and
+  configs (`oosFetch`, `militaryUniverse`, `eventUniverse`). Crawl yield:
+  1,280 fresh resolved military slugs.
+- Roster: `configs/oosExpansionFetch.yaml`, 200 slugs with a ≤5-per-stem
+  diversity cap so date-ladder clones ("israel-strikes-iran-by-december-31",
+  ...) don't drown one question. Episode spread: iran 45, ukraine-russia 45,
+  gaza-hamas 25, venezuela-maduro 20, houthis-yemen 15, hezbollah-lebanon 15,
+  pakistan-india 10, syria 10, nato 8, taiwan 5, other-strike 2.
+  Schema matches `oosFetch.yaml` (same `splitDate: 2026-01-01`;
+  `fetch.dataDir: data/oosExpansion` — a separate dir, so the 60 oosFetch
+  slugs stay untouched alongside).
+- Smoke test (no bulk pull): `pc2 fetch --config configs/oosExpansionFetch.yaml
+  --event-slug <3 of them> --set fetch.dataDir=data/oosProbe` → 3 slugs all
+  resolved (`markets 11, fills 12063, accounts 2090`), markets.parquet carried
+  winner + resolvedAt for each; probe dir deleted afterward. Config load +
+  slug-uniqueness + zero-overlap check: PASS.
+- Next step: launch the full 200-slug fetch into `data/oosExpansion` under
+  supervision, then re-run the floor-ranked candidate-track evaluation with
+  the same entrySweep/oosTransport machinery as the 60-slug pull. No PnL
+  claims from this subsection; the fetch itself is not yet run.
 

@@ -1,0 +1,12 @@
+# OOS transport eval of the floor-ranked military burst-entry cells.
+# Mirrors configs/sweeps/militaryEntryGrid.yaml (identical grid axes) but pins
+# the fetch scope to the out-of-sample military tape (configs/oosFetch.yaml,
+# 60 slugs). Run: uv run python scripts/research/entrySweep.py \
+#     --data-dir data/oos --grid configs/sweeps/oosEntryGrid.yaml
+fetch:
+  dataDir: data/oos
+grid:
+  minUsd: [500, 1000, 2000, 5000, 10000, 20000]
+  maxPrice: [0.2, 0.35, 0.5, 0.65]
+  ageDays: [1, 2, 3, 5, 7]
+  marketsSoFar: [1, 2, 3, 5]

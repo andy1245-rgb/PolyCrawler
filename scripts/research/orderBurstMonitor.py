@@ -10,9 +10,11 @@ logs/orderBurstAnalysis.log.
 The day list is not duplicated here: it comes from the plan file the puller
 writes at startup (data/raw/dune/samplePlan.json), or — while the file does
 not exist yet — the puller's own sampleDays() + its constants, so any change
-to the sampling plan keeps the monitor in sync. Days that have not yet
-elapsed are excluded: "complete" means all OBSERVED days are cached, never a
-future day (which would make the monitor time out forever mid-month). A day
+to the sampling plan keeps the monitor in sync. Days after today are
+excluded: "complete" means all OBSERVED days are cached, never a future day
+(which would make the monitor time out forever mid-month); today itself
+counts — by the time the monitor fires, the puller has already written the
+day-or-header-only cache for today. A day
 is done when its onchainBuy_<date>.csv exists (header-only days count — a
 zero-leg day is a valid pull result).
 
@@ -38,7 +40,7 @@ import json
 import sys
 import time
 from contextlib import redirect_stdout
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -66,12 +68,17 @@ def samplePlanDays(perMonth: int = PULLER.PER_MONTH) -> list[date]:
     return PULLER.sampleDays(monthsFrom, perMonth)
 
 
-def planDays(perMonth: int = PULLER.PER_MONTH) -> list[date]:
-    """Days the monitor waits for: the puller's plan minus days that have not
-    yet elapsed (today and later are dropped) — the monitor must never sit
-    waiting on a future day's cache."""
-    today = datetime.now(timezone.utc).date()
-    return [d for d in samplePlanDays(perMonth) if d < today]
+def planDays(perMonth: int = PULLER.PER_MONTH,
+             today: date | None = None) -> list[date]:
+    """Days the monitor waits for: the puller's plan minus days after today
+    (today and later were dropped before the 2026-10-15 fix — but today IS an
+    elapsed sampled day, so with `<` the monitor fired today's analysis just
+    before today's cache landed and the full-plan sentinel then permanently
+    blocked re-firing) — the monitor must never wait on a future day's
+    cache, so the filter keeps the plan up to and including today. `today`
+    is injectable for tests; the default is today in UTC."""
+    today = today or datetime.now(UTC).date()
+    return [d for d in samplePlanDays(perMonth) if d <= today]
 
 
 def planHash(days: list[date]) -> str:
@@ -128,7 +135,7 @@ def runAnalysis(duneDir: Path, logPath: Path) -> None:
     _spec.loader.exec_module(analysis)  # also loads duneOrderBurst as "dob"
     logPath.parent.mkdir(parents=True, exist_ok=True)
     with logPath.open("a") as logFile:
-        started = datetime.now(timezone.utc).isoformat()
+        started = datetime.now(UTC).isoformat()
         logFile.write(f"=== orderBurstAnalysis started {started} ===\n")
         logFile.flush()
         with redirect_stdout(Tee(sys.stdout, logFile)):
@@ -178,7 +185,7 @@ def main() -> None:
     cached, total = progress(duneDir, days)
     print(f"pull complete: {cached}/{total} cached; running analysis", flush=True)
     runAnalysis(duneDir, LOG_PATH)
-    sentinel.write_text(datetime.now(timezone.utc).isoformat() + "\n")
+    sentinel.write_text(datetime.now(UTC).isoformat() + "\n")
     print(f"analysis done, log appended -> {LOG_PATH} "
           f"(sentinel {sentinel.name})", flush=True)
 

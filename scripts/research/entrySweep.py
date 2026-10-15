@@ -19,36 +19,38 @@ Run: uv run python scripts/research/entrySweep.py \
 
 import argparse
 import hashlib
+import importlib.util
 import itertools
-import json
 import random
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import polars as pl
 import yaml
-from polycrawler.backtest import dirsFromConfig
-from polycrawler.config import Config, FetchConfig
 
 t0 = time.time()
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_DIR = ROOT / "data" / "entrySweep"
 
-# Research cells span the accrued universe (data/ + data/universe); dir
-# resolution goes through the config system like the engine side.
-RESEARCH_FETCH = Config(fetch=FetchConfig(dataDirs=["data", "data/universe"]))
+# shared research-data plumbing (dir resolution + the keyword-parametrized
+# markets frame — one owner per the merge plan: the keyword param lives in
+# researchData.militaryMarketsFrame, entrySweep delegates through it)
+_sharedSpec = importlib.util.spec_from_file_location(
+    "researchData", ROOT / "scripts" / "research" / "researchData.py")
+researchData = importlib.util.module_from_spec(_sharedSpec)
+sys.modules["researchData"] = researchData
+_sharedSpec.loader.exec_module(researchData)
+
+MILITARY = researchData.MILITARY          # single source, re-exported
+RESEARCH_FETCH = researchData.RESEARCH_FETCH  # dirs scope ([data, data/universe])
 
 FILL_WINDOW_SEC = 300
-HALF_SPLIT = datetime(2025, 6, 1, tzinfo=timezone.utc)
+HALF_SPLIT = datetime(2025, 6, 1, tzinfo=UTC)  # 2025-06-01 split, same instant as before
 BOOTS = 1000
 MIN_CELL = 20
-
-MILITARY = ("iran", "israel", "hezbollah", "houthi", "lebanon", "hamas", "gaza",
-            "ukraine", "russia", "taiwan", "pakistan-military", "maduro", "venezuela",
-            "nato", "strike")
 
 GRID_AXES = {
     "minUsd": [500, 1000, 2000, 5000, 10000, 20000],
@@ -72,48 +74,31 @@ def _rows(path: Path) -> int:
 
 def dataFingerprint(dirs: list[str], keywords: tuple[str, ...] | None = MILITARY) -> str:
     """Cache key over the build inputs (fills.parquet + markets.parquet of
-    every dir): path, size, mtime and row count of each. An equal-size
-    in-place rewrite changes the mtime/row count and misses the cache.
-    The event-keyword tuple is part of the key too: the cache only stores
-    entries of one keyword universe, so a different filter (or the
-    non-military complement) must produce a different cache name."""
+    every dir): path, size, mtime and row count of each (one stat() per
+    file). An equal-size in-place rewrite changes the mtime/row count and
+    misses the cache. The event-keyword tuple is part of the key too
+    (merged fingerprint recipe: main's stat-per-file digest + the branch's
+    keywords digest): the cache only stores entries of one keyword
+    universe, so a different filter (or the non-military complement) must
+    produce a different cache name."""
     digest = hashlib.sha1()
     digest.update(f"entrySweepCacheSchema{CACHE_SCHEMA_VERSION}".encode())
     digest.update(("keywords:" + ",".join(keywords) if keywords
                    else "keywords:none(exclude)").encode())
     for d in dirs:
         for name in ["fills.parquet", "markets.parquet"]:
-            p = Path(d) / name
+            st = (Path(d) / name).stat()  # one stat per file, both fields from it
             digest.update(str(Path(d).resolve()).encode())
             digest.update(name.encode())
-            digest.update(str(p.stat().st_size).encode())
-            digest.update(str(p.stat().st_mtime_ns).encode())
-            digest.update(str(_rows(p)).encode())
+            digest.update(str(st.st_size).encode())
+            digest.update(str(st.st_mtime_ns).encode())
+            digest.update(str(_rows(Path(d) / name)).encode())
     return digest.hexdigest()[:10]
-
-
-def militaryMarketsTable(markets: pl.DataFrame,
-                         keywords: tuple[str, ...] | None = MILITARY) -> pl.DataFrame:
-    """Markets whose eventSlug passes the keyword filter. keywords=None
-    selects the complement: every eventSlug matching NONE of MILITARY (the
-    non-military control universe)."""
-    bases = markets.unique("marketId", keep="last").select(
-        "marketId", "eventSlug", "winner",
-        pl.coalesce("resolvedAt", "endDate").alias("resolvedAt"))
-    if keywords is None:
-        return bases.filter(pl.col("eventSlug").map_elements(
-            lambda s: not any(k in (s or "").lower() for k in MILITARY),
-            return_dtype=pl.Boolean))
-    return bases.filter(pl.col("eventSlug").map_elements(
-        lambda s: any(k in (s or "").lower() for k in keywords), return_dtype=pl.Boolean))
 
 
 def buildEntries(dirs: list[str], keywords: tuple[str, ...] | None = MILITARY) -> pl.DataFrame:
     lazy = pl.concat([pl.scan_parquet(f"{d}/fills.parquet") for d in dirs], how="diagonal_relaxed")
-    markets = pl.concat(
-        [pl.read_parquet(f"{d}/markets.parquet") for d in dirs], how="diagonal_relaxed")
-    cellMarkets = militaryMarketsTable(markets, keywords)
-    cols = ["ts", "account", "marketId", "outcome", "side", "size", "price"]
+    milMarkets = researchData.militaryMarketsFrame(dirs, keywords)
     firstSeen = lazy.group_by("account").agg(firstTs=pl.col("ts").min()).collect()
     entries = (
         lazy.filter(pl.col("side") == "BUY").drop("side")
@@ -129,7 +114,7 @@ def buildEntries(dirs: list[str], keywords: tuple[str, ...] | None = MILITARY) -
         .drop("burst", "shares")
         .collect()
     )
-    entries = (entries.join(cellMarkets, on="marketId").join(firstSeen, on="account")
+    entries = (entries.join(milMarkets, on="marketId").join(firstSeen, on="account")
                .sort("account", "ts")
                .with_columns(
                    marketsSoFar=pl.col("marketId").is_first_distinct().cast(pl.Int32).cum_sum().over("account"),
@@ -250,7 +235,7 @@ def main() -> None:
     parser.add_argument("--grid", default="configs/sweeps/militaryEntryGrid.yaml")
     parser.add_argument("--limit", type=int, default=30)
     args = parser.parse_args()
-    dirs = [str(p) for p in dirsFromConfig(ROOT, args.data_dir, RESEARCH_FETCH)]
+    dirs = [str(p) for p in researchData.researchDataDirs(requested=args.data_dir)]
     spec = yaml.safe_load(Path(args.grid).read_text()) or {}
     grid = spec.get("grid") or {}
     entries = loadEntries(dirs, args.refresh)

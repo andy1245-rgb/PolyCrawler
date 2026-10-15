@@ -53,6 +53,15 @@ esw = importlib.util.module_from_spec(_spec)
 sys.modules["entrySweep"] = esw
 _spec.loader.exec_module(esw)
 
+# oosTransport pattern: researchData by-path too — the merged extraction
+# moved RESEARCH_FETCH/researchDataDirs out of entrySweep, so the dir list
+# resolves through the shared module, not esw.* attributes.
+_spec = importlib.util.spec_from_file_location(
+    "researchData", ROOT / "scripts" / "research" / "researchData.py")
+researchData = importlib.util.module_from_spec(_spec)
+sys.modules["researchData"] = researchData
+_spec.loader.exec_module(researchData)
+
 OVERRIDES_PATH = ROOT / "configs" / "episodeOverrides.yaml"
 DEFAULT_K = 5
 EPISODE_BOOTS = 10_000
@@ -410,7 +419,7 @@ def main() -> None:
                         help="print the episode P(>0) band across the "
                              "GT-admissible K window for shipped/$10k cells")
     args = parser.parse_args()
-    dirs = [str(p) for p in esw.dirsFromConfig(ROOT, args.data_dir, esw.RESEARCH_FETCH)]
+    dirs = [str(p) for p in researchData.researchDataDirs(requested=args.data_dir)]
     overrides = loadOverrides()
     mil = esw.loadEntries(dirs, args.refresh)                     # 15-keyword universe
     nonmil = esw.loadEntries(dirs, args.refresh, keywords=None)   # complement (control)

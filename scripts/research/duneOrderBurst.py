@@ -22,6 +22,7 @@ resting wallet — per the Dune schema both legs read side off maker_side).
 Run:  uv run python scripts/research/duneOrderBurst.py [--refresh]
 """
 
+import importlib.util
 import json
 import random
 import sys
@@ -32,48 +33,25 @@ from pathlib import Path
 import httpx
 import polars as pl
 
-from polycrawler.backtest import dirsFromConfig
-from polycrawler.config import Config, FetchConfig
+ROOT = Path(__file__).resolve().parents[2]
+
+# shared research-data plumbing (dirs, military slugs, markets frame)
+_researchDataSpec = importlib.util.spec_from_file_location(
+    "researchData", ROOT / "scripts" / "research" / "researchData.py")
+researchData = importlib.util.module_from_spec(_researchDataSpec)
+sys.modules["researchData"] = researchData
+_researchDataSpec.loader.exec_module(researchData)
 
 t0 = time.time()
-ROOT = Path(__file__).resolve().parents[2]
 DUNE_DIR = ROOT / "data" / "raw" / "dune"
 DUNE_API = "https://api.dune.com/api/v1"
 COND_BATCH = 300           # condition ids per SQL execution
 POLL_SECS = 5
 POLL_TIMEOUT = 600
 
-# Research cells span the accrued universe, so both dirs by default; the
-# resolution goes through the config system (fetch.dataDirs / --data-dir),
-# same precedence as the engine side.
-RESEARCH_FETCH = Config(fetch=FetchConfig(dataDirs=["data", "data/universe"]))
-MILITARY = ("iran", "israel", "hezbollah", "houthi", "lebanon", "hamas", "gaza",
-            "ukraine", "russia", "taiwan", "pakistan-military", "maduro", "venezuela",
-            "nato", "strike")
 RULE_MIN_USD = 5000
 BURST_WINDOW_SEC = 600
 FILL_WINDOW_SEC = 300
-
-
-def isMilitarySlug(slug: str) -> bool:
-    return any(k in (slug or "").lower() for k in MILITARY)
-
-
-def researchDataDirs(root: Path | None = None, requested=None) -> list[Path]:
-    """CLI --data-dir wins over fetch.dataDirs, else fetch.dataDir, resolving
-    against the repo root."""
-    return dirsFromConfig(root or ROOT, requested, RESEARCH_FETCH)
-
-
-def militaryMarkets(dirs=None) -> pl.DataFrame:
-    dirs = dirs or researchDataDirs()
-    markets = (pl.concat([pl.read_parquet(f"{d}/markets.parquet")
-                          for d in dirs], how="diagonal_relaxed")
-               .unique("marketId", keep="last")
-               .select("marketId", "eventSlug", "winner",
-                       pl.coalesce("resolvedAt", "endDate").alias("resolvedAt")))
-    return markets.filter(pl.col("eventSlug").map_elements(
-        isMilitarySlug, return_dtype=pl.Boolean))
 
 
 def buildSql(conditionIds: list[str]) -> str:
@@ -225,7 +203,7 @@ def main() -> None:
     args = argparse.ArgumentParser()
     args.add_argument("--data-dir", action="append", default=None)
     args = args.parse_args()
-    dirs = researchDataDirs(requested=args.data_dir)
+    dirs = researchData.researchDataDirs(requested=args.data_dir)
     key = ""
     import os
     if os.environ.get("DUNE_API_KEY"):
@@ -235,7 +213,7 @@ def main() -> None:
         sys.exit("DUNE_API_KEY not set and no cached batches under data/raw/dune/; "
                  "export DUNE_API_KEY and rerun")
 
-    markets = militaryMarkets(dirs)
+    markets = researchData.militaryMarketsFrame(dirs)
     conditionIds = sorted(markets["marketId"].to_list())
     print(f"military markets: {len(conditionIds)} across {markets['eventSlug'].n_unique()} events")
 

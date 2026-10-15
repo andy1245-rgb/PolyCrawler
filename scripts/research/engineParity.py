@@ -33,7 +33,7 @@ import importlib.util
 import json
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
@@ -44,16 +44,16 @@ OUT_PATH = ROOT / "data" / "parity" / "engineResearchParity.json"
 RUNS_DIR = ROOT / "runs"
 
 spec = importlib.util.spec_from_file_location(
-    "dob", ROOT / "scripts" / "research" / "duneOrderBurst.py")
-dob = importlib.util.module_from_spec(spec)
-sys.modules["dob"] = dob
-spec.loader.exec_module(dob)
+    "researchData", ROOT / "scripts" / "research" / "researchData.py")
+researchData = importlib.util.module_from_spec(spec)
+sys.modules["researchData"] = researchData
+spec.loader.exec_module(researchData)  # researchDirs/slugs shared with the other research scripts
 
 sys.path.insert(0, str(ROOT / "scripts"))
-import backtest as backtestCli  # noqa: E402
+import backtest as backtestCli
 
-from polycrawler.backtest import dirsFromConfig, loadInputs, runBacktest  # noqa: E402
-from polycrawler.strategy import normalizeClusterMap  # noqa: E402
+from polycrawler.backtest import dirsFromConfig, loadInputs, runBacktest
+from polycrawler.strategy import normalizeClusterMap
 
 
 def marketsFrame(dirs: list[Path]) -> pl.DataFrame:
@@ -65,8 +65,7 @@ def marketsFrame(dirs: list[Path]) -> pl.DataFrame:
                        pl.coalesce("resolvedAt", "endDate").alias("resolvedAt")))
     return markets.with_columns(
         isMilitary=pl.col("eventSlug").map_elements(
-            lambda s: any(k in (s or "").lower() for k in dob.MILITARY),
-            return_dtype=pl.Boolean))
+            researchData.isMilitarySlug, return_dtype=pl.Boolean))
 
 
 def burstTape(dirs: list[Path], cols: list[str]) -> tuple[pl.LazyFrame, pl.LazyFrame]:
@@ -168,7 +167,7 @@ def engineSide(params, dirs: list[Path], loaded) -> tuple[dict, Path, dict]:
     fills, markets, accounts, clusterMap = loadInputs(dirs)
     endTs = fills.select(pl.col("ts").max()).collect().item()
     startTs = datetime(loaded.splitDate.year, loaded.splitDate.month,
-                       loaded.splitDate.day, tzinfo=timezone.utc)
+                       loaded.splitDate.day, tzinfo=UTC)
     result = runBacktest(fills, markets, accounts, params, startTs, endTs,
                          clusterMap=clusterMap, runsDir=RUNS_DIR)
     runDir = RUNS_DIR / result.paramsHash
@@ -222,7 +221,7 @@ def main() -> None:
                        for k, v in buckets.items()},
            "config": str(configPath.relative_to(ROOT)),
            "fillsEndTs": str(summary.get("endTs")),
-           "generatedAt": datetime.now(timezone.utc).isoformat()}
+           "generatedAt": datetime.now(UTC).isoformat()}
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(json.dumps(out, indent=2, default=str))
     print(f"\nwritten {OUT_PATH} ({time.time() - t0:.0f}s)")

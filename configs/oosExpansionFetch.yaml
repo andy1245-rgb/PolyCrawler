@@ -1,0 +1,226 @@
+# OOS expansion fetch: +200 resolved military event slugs beyond the 60 in
+# oosFetch.yaml (research/status.md §9 oosTransport: only 8 events carried
+# legal >=$5k bursts, so the floor-ranked cells ($10k/<=0.35 etc.) were
+# ungradeable). Slugs discovered from gamma /events tag crawls using the
+# SHIPPED 15-keyword military filter (scripts/research/researchData.py
+# MILITARY), resolved-only, fresh (not in data/, data/oos, data/universe or
+# other configs), volume >= $20k, spread across episode families:
+# iran 45 | ukraine-russia 45 | gaza-hamas 25 | houthis-yemen 15 |
+# hezbollah-lebanon 15 | venezuela-maduro 20 | pakistan-india 10 | syria 10 |
+# taiwan 5 | nato 8 | other-strike 2
+splitDate: '2026-01-01'
+
+fetch:
+  dataDir: data/oosExpansion
+  eventSlugs:
+    # iran (45)
+    - us-forces-enter-iran-by
+    - will-the-iranian-regime-fall-by-june-30
+    - will-the-iranian-regime-fall-by-april-30
+    - israel-x-iran-ceasefire-before-july
+    - khamenei-out-as-supreme-leader-of-iran-by-january-31
+    - iran-x-israelus-conflict-ends-by
+    - will-the-iranian-regime-fall-by-may-31
+    - iran-ceasefire-continues-through
+    - us-military-action-against-iran-before-july
+    - military-action-against-iran-ends-by-522
+    - us-x-iran-meeting-by
+    - us-and-iran-sign-an-agreement-byptptpt-20260611221049850
+    - will-the-united-states-officially-declare-war-on-iran-before-july
+    - major-cyberattack-on-iran-in-june
+    - iran-closes-its-airspace-by
+    - trump-announces-end-of-military-operations-against-iran-by
+    - iran-agrees-to-end-enrichment-of-uranium-by-june-30
+    - who-will-enter-iran-by-june-30
+    - will-the-iranian-regime-fall-by-january-31
+    - us-iran-nuclear-deal-by-june-30
+    - us-announces-new-iran-agreementceasefire-extension-by
+    - khamenei-out-as-supreme-leader-of-iran-in-2025
+    - us-x-iran-effective-ceasfire-byptptpt-2-week-pause-20260715194822042
+    - israel-x-iran-permanent-peace-deal-by
+    - khamenei-out-as-supreme-leader-of-iran-by-june-30-747
+    - khamenei-out-as-supreme-leader-of-iran-by-june-30
+    - us-x-iran-diplomatic-meeting-by-833
+    - us-x-iran-diplomatic-meeting-by-329
+    - us-iran-nuclear-deal-by-may-31-974
+    - what-iranian-demands-will-trump-agree-to-by-june-30
+    - will-iran-close-the-strait-of-hormuz-before-july
+    - will-the-us-invade-iran-by-march-31
+    - will-iran-close-the-strait-of-hormuz-by-2027
+    - what-will-the-usisrael-target-in-iran-by-february-28
+    - iran-strike-on-israel-by
+    - will-the-iranian-regime-fall-in-2025
+    - will-israel-nuke-iran-by-january-31
+    - will-france-uk-or-germany-strike-iran-by-march-31-929
+    - xi-meets-with-iranian-officials-by-may-15
+    - khamenei-out-as-supreme-leader-of-iran-by-december-31-2026
+    - us-iran-deal-text-released-byptptpt-20260615224044572
+    - israel-military-action-against-iran-before-july
+    - us-military-action-against-iran-by-saturday
+    - iran-strike-on-israel-by-friday
+    - will-another-country-strike-iran-by-march-31
+    # ukraine-russia (45)
+    - russia-x-ukraine-ceasefire-by-may-31-2026
+    - russia-x-ukraine-ceasefire-by-june-30-2026
+    - trump-wins-ends-ukraine-war-in-90-days
+    - russia-x-ukraine-ceasefire-by-january-31-2026
+    - which-party-will-gain-most-seats-in-russian-parliamentary-election
+    - russia-x-ukraine-ceasefire-before-2027
+    - will-trump-impose-more-sanctions-on-russia-by-september-30
+    - russia-x-ukraine-ceasefire-before-june
+    - ukraine-agrees-to-give-trump-rare-earth-metals-before-april
+    - will-trump-administration-announces-end-of-ukraine-aid-by-next-friday
+    - energy-infrastructure-ceasefire-in-ukraine-in-march
+    - trump-ends-ukraine-war-before-inauguration
+    - ukraine-agrees-to-us-approved-peace-plan-by-thursday
+    - ukraine-strikes-another-tanker-in-black-sea-by-835
+    - putin-out-as-president-of-russia-in-2025
+    - ukraine-signs-peace-deal-with-russia-in-2025
+    - will-ukraine-hold-kursk-through-2024
+    - will-russia-abandon-syrian-naval-base-before-april-2025
+    - will-russia-use-a-nuclear-weapon-in-2024
+    - russia-parliamentary-election-winner
+    - will-russia-capture-kurakhove-before-december
+    - will-ukraine-join-nato-in-2024
+    - will-putin-remain-president-of-russia-through-2024
+    - ukraine-agrees-not-to-join-nato-by-june-30
+    - will-ukraine-hold-kursk-through-october-31
+    - will-ukraine-agree-to-cede-territory-to-russia
+    - russian-strike-on-poland-by-september-30
+    - ukraine-agrees-not-to-join-nato-before-july
+    - russian-strike-on-a-nato-member-by-october-31
+    - seaair-ceasefire-in-ukraine-before-may
+    - will-ukraine-agree-to-payback-us-aid-before-july
+    - russia-x-ukraine-ceasefire-in-march
+    - will-russia-capture-all-of-pokrovsk-by-september-30
+    - will-russia-capture-siversk-by-september-30
+    - us-recognizes-russian-sovereignty-over-ukraine
+    - zelenskyy-out-as-ukraine-president-by-october-31
+    - will-russia-capture-pokrovsk-in-2024
+    - will-trump-visit-russia-by-may-9
+    - will-putin-remain-president-of-russia-through-june-2025
+    - russia-elections-united-russia-wins-every-region
+    - will-russia-capture-all-of-myrnohrad-by
+    - will-russia-capture-huliaipole-by-december-31
+    - russia-elections-yabloko-clears-duma-threshold
+    - ukraine-officially-agrees-to-a-us-backed-ceasefire-framework-in-2025
+    - how-many-seats-will-united-russia-win-in-the-next-russian-legislative-election
+    # gaza-hamas (25)
+    - israel-x-hamas-ceasefire-by-august-31
+    - israel-x-hamas-ceasefire-by-october-31
+    - israel-x-hamas-ceasefire-before-july-2025
+    - israel-x-hamas-ceasefire-by-september-30
+    - israel-x-hamas-ceasefire-by-october-10
+    - israel-x-hamas-ceasefire-in-2024
+    - will-israel-strike-gaza-on
+    - israel-withdraws-from-gaza-in-2025
+    - will-israel-allow-independent-journalists-into-gaza-by-december-31
+    - will-hamas-release-all-israeli-hostages-by-october-31
+    - will-israel-strike-gaza-on-379
+    - will-greta-thunberg-enter-gaza-by-next-friday
+    - trump-ends-gaza-war-in-100-days
+    - israel-x-hamas-ceasefire-cancelled-before-april
+    - will-israel-raid-gaza-aid-flotilla-by
+    - will-israel-strike-gaza-on-224
+    - hamas-lose-power-in-gaza-before-february
+    - israel-military-action-against-gaza-on
+    - israel-military-action-in-gaza-on
+    - hamas-still-in-power-in-gaza-by-oct-31
+    - will-the-us-take-over-gaza-in-2025
+    - when-will-israel-first-raid-gaza-aid-flotilla
+    - will-hamas-release-any-more-hostages-by-october-31-318
+    - next-israel-x-hamas-ceasefire-in
+    - will-israel-launch-a-major-ground-offensive-in-gaza-in-may
+    # houthis-yemen (15)
+    - houthi-strike-on-israel-by-632
+    - another-successful-houthis-attack-shipping-in-july
+    - israel-strike-on-yemen-by-593
+    - another-israel-military-action-on-yemen-by-friday
+    - israel-strike-on-yemen-on
+    - israel-strikes-yemen-by-august-15
+    - israel-strikes-yemen-by-monday
+    - israel-strikes-on-yemen-by-friday
+    - israel-strikes-yemen-by-august-31
+    - israel-next-strike-on-yemen-on
+    - israel-military-action-on-yemen-before-june
+    - another-israel-strike-on-yemen-in-july
+    - usisrael-strike-yemen-by
+    - houthi-strike-on-israel-before-july
+    - israel-strikes-yemen-by-august-22-584
+    # hezbollah-lebanon (15)
+    - israel-x-hezbollah-ceasefire-extended-by
+    - israel-announces-lebanon-ceasefire-extension-by
+    - israeli-forces-enters-lebanon-in-september
+    - will-israel-enter-lebanon-before-November
+    - will-israel-strike-lebanon-on
+    - israel-x-hezbollah-permanent-peace-deal-by
+    - israel-military-action-against-lebanon-on
+    - hezbollah-military-action-against-israel-on
+    - will-israel-strike-lebanon-on-928
+    - israel-announces-suspension-of-lebanon-offensive-by
+    - will-hezbollah-to-disarm-before-in-2025
+    - will-israel-invade-lebanon-before-september
+    - israel-withdraws-from-lebanon-before-december
+    - israel-and-lebanon-normalize-relations-in-2025
+    - israel-withdraws-from-lebanon-before-march
+    # venezuela-maduro (20)
+    - us-x-venezuela-military-engagement-by
+    - maduro-in-us-custody-by-january-31
+    - will-the-us-officially-declare-war-on-venezuela-in-2025
+    - venezuela-election-winner
+    - us-forces-in-venezuela-again-by
+    - will-trump-talk-to-nicols-maduro-by-december-31
+    - us-recognizes-machado-as-leader-of-venezuela-by-january-31
+    - nicols-maduro-seen-in-public-by-january-5
+    - another-us-strike-on-venezuela-on
+    - fact-check-maduro-capture-staged
+    - maduro-mugshot-released-by-monday
+    - another-us-strike-on-venezuela-by
+    - will-venezuela-give-the-us-oil-by-january-31
+    - next-us-x-venezuela-military-engagement-on
+    - maduro-out-before-september
+    - us-forces-seize-another-venezuela-linked-oil-ship-in-2025-451
+    - maduro-in-us-custody-by-december-31
+    - maduro-trial-scheduled-by-january-31
+    - maduro-travels-outside-venezuela-by-march-31
+    - maduro-out-in-2024
+    # pakistan-india (10)
+    - another-india-military-strike-on-pakistan-by-friday-475
+    - pakistan-airmissile-strike-on-indian-soil-by-friday-956
+    - pakistan-military-action-against-afghanistan-by-20260925
+    - india-x-pakistan-military-clash-before-july
+    - india-military-strike-on-pakistan-by-next-friday
+    - india-military-strike-on-pakistan-by-friday
+    - pakistan-airmissile-strike-on-indian-soil-by-friday-may-16
+    - pakistan-airmissile-strike-on-indian-soil-in-may
+    - pakistan-military-action-against-afghanistan-by-march-31
+    - india-airmissile-strike-on-pakistan-soil-by-friday
+    # syria (10)
+    - israel-x-syria-security-agreement-by-september-30
+    - will-israel-strike-syria-by-september-15
+    - israel-strikes-syria-by-friday
+    - us-strike-on-syria-by-529
+    - us-strike-on-syria-by
+    - israel-x-syria-territorial-agreement-by-end-of-2025
+    - will-israeli-soldiers-enter-as-suwayda-province-of-syria-before-september-2025
+    - will-any-european-country-expel-an-israeli-ambassador-by-march-31
+    - israel-strikes-syria-by-july-31
+    - next-us-strike-on-syria-on
+    # taiwan (5)
+    - will-china-invade-taiwan-by-march-31-2026
+    - will-china-invade-taiwan-in-2024
+    - will-china-invade-taiwan-by-september-30-2026
+    - will-china-blockade-taiwan-by-june-30
+    - trump-endorses-chinas-claim-to-taiwan-this-week
+    # nato (8)
+    - will-austria-join-nato-by-december-31
+    - will-us-leave-nato-by-june-30
+    - will-sweden-join-nato-by-february-29
+    - nato-article-5-in-2025-763
+    - will-trump-withdraw-the-us-from-nato-in-2025
+    - will-sweden-join-nato-by
+    - will-trump-attend-nato-summit-279
+    - trump-announces-the-us-is-giving-up-nato-command-before-may
+    # other-strike (2)
+    - israel-military-action-against-iraq-before-november
+    - next-country-us-strikes-918
