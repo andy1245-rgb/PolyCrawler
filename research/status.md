@@ -561,3 +561,109 @@ both approved fixes are now in, one commit each:
   the same entrySweep/oosTransport machinery as the 60-slug pull. No PnL
   claims from this subsection; the fetch itself is not yet run.
 
+### 9.2 oosExpansion: the transport verdict is FAIL at resolution (2026-10-15, latest)
+
+- Data: `data/oosExpansion` fetched landed. 200 slug-roster events, 962
+  markets, 10.66M fills, 469k accounts, tape 2023-10-15 → 2026-10-03
+  (splitDate 2026-01-01 pinned in the roster config). Scope checks: all
+  200/200 slugs carry ≥1 of the shipped 15 military keywords (the keyword
+  filter is a no-op on this all-military roster, as expected); ZERO
+  marketId/eventSlug overlap against `data/`, `data/universe` and `data/oos`
+  — a clean fresh holdout. 49 markets across 4 events are unresolved (no
+  winner/resolvedAt) and drop from the entry tape by design (ret-null filter).
+- DataDirs for the eval: `[data/oosExpansion]` ALONE, via CLI
+  `--data-dir data/oosExpansion` (dirsFromConfig precedence: CLI >
+  fetch.dataDirs > fetch.dataDir). Deliberately NOT mixed with the in-sample
+  dirs — nothing in-sample could leak into the numbers below.
+- Machinery, unchanged: 480-cell grid `configs/sweeps/oosExpansionEntryGrid.yaml`
+  (NEW config, grid axes identical to `oosEntryGrid.yaml` /
+  `militaryEntryGrid.yaml`; only the fetch scope differs) run through
+  `scripts/research/entrySweep.py` (log `logs/oosExpansionEntrySweep.log`),
+  candidate neighborhood + delay-realistic through
+  `scripts/research/oosTransport.py` (log `logs/oosExpansionTransport.log`)
+  on the same entries cache
+  (`data/entrySweep/entries_v2_5a57e33ce8.parquet`: 3,599,688 burst entries,
+  200 events, 468k accounts). Nothing re-implemented, nothing tuned to the
+  data; episode-level regrouping was NOT done (the account-overlap episode
+  rule lives on feature/episodeScope and is not trivially reproducing from
+  main's docs — skipped, noted as a limitation).
+- Executability resolved: overall landed300 = **68.8%** of all burst
+  triggers (was 49.8% on the 60-slug pull), and 85–98% inside the
+  candidate track — these expansion books are liquid at burst time, so the
+  "whole-burst not executable" objection no longer applies; the
+  delay-realistic numbers below are graded on 88–97% of each cell's entries.
+- **Full-grid strict-PASS count stays 0 — but no longer for thinness.** 464
+  of 480 cells reach the MIN_CELL floor (was 219 with only ~8 real events)
+  and NOT ONE has p5 > 0: best gradeable p5 anywhere = −0.304 (all top cells
+  are ≤0.65 deep-favorite cells), best gradeable ret anywhere = −0.166,
+  mean gradeable ret −0.473. The 224 gradeable cells at ≤0.35/≤0.40 are
+  worse: max p5 −0.621, max ret −0.373. Grace at scale: a control on the
+  same tape (all $10k+ bursts, any price/age: n=16,896, ret +1.1%,
+  winRate 90.9%) shows the tape and winner coding are sound — the loss is
+  specific to the ≤0.35 longshot copy line.
+- Candidate track (whole-burst retReal = hold-to-resolution at the next-print
+  fill price; the pre-registered gate: PASS only if p5 > 0 AND P(>0) ≥ 85%
+  AND delay-corrected > 0 AND top-event share < 60%; MIN_CELL = 20 entries
+  this time — every cell below is gradeable, so these are PASS/FAIL verdicts
+  not INCONCLUSIVE):
+
+  | cell (≤5d fresh, ≤3 mkts) | n | evts | accts | retReal | winRate | p5 | P(>0) | h1 | h2 | landed300 | delay-real. n / ret / P(>0) |
+  |---|---|---|---|---|---|---|---|---|---|---|---|
+  | $5k/≤0.30 | 338 | 53 | 223 | −0.599 | 5.6% | −0.865 | 2.8% | −0.677 | −0.587 | 92.0% | 311 / −0.604 / 2.6% |
+  | $7.5k/≤0.30 | 211 | 43 | 142 | −0.851 | 3.8% | −0.954 | 0.0% | −0.625 | −0.890 | 91.0% | 192 / −0.899 / 0.0% |
+  | $10k/≤0.30 | 142 | 29 | 97 | −0.811 | 4.9% | −0.940 | 0.0% | −0.584 | −0.842 | 92.3% | 131 / −0.852 / 0.0% |
+  | $12.5k/≤0.30 | 104 | 23 | 71 | −0.845 | 3.8% | −0.975 | 0.1% | −0.650 | −0.869 | 93.3% | 97 / −0.875 / 0.0% |
+  | $5k/≤0.35 | 394 | 60 | 262 | −0.550 | 8.1% | −0.809 | 2.0% | −0.487 | −0.563 | 91.9% | 362 / −0.579 / 1.5% |
+  | $7.5k/≤0.35 | 252 | 48 | 172 | −0.734 | 7.5% | −0.868 | 0.0% | −0.366 | −0.810 | 90.9% | 229 / −0.801 / 0.0% |
+  | **$10k/≤0.35 (in-sample floor-ranked)** | **167** | **34** | **113** | **−0.727** | **7.8%** | **−0.875** | **0.0%** | **−0.217** | **−0.817** | **91.0%** | **152 / −0.812 / 0.0%** |
+  | $12.5k/≤0.35 | 121 | 27 | 82 | −0.737 | 7.4% | −0.905 | 0.1% | −0.092 | −0.850 | 91.7% | 111 / −0.834 / 0.0% |
+  | $5k/≤0.40 | 491 | 65 | 321 | −0.557 | 9.8% | −0.766 | 0.5% | −0.541 | −0.560 | 90.8% | 446 / −0.579 / 1.5% |
+  | $7.5k/≤0.40 | 322 | 54 | 219 | −0.689 | 9.9% | −0.832 | 0.0% | −0.448 | −0.748 | 89.8% | 289 / −0.738 / 0.0% |
+  | $10k/≤0.40 | 220 | 41 | 150 | −0.700 | 9.5% | −0.858 | 0.0% | −0.446 | −0.756 | 88.6% | 195 / −0.762 / 0.0% |
+  | $12.5k/≤0.40 | 160 | 31 | 107 | −0.705 | 9.4% | −0.872 | 0.0% | −0.436 | −0.765 | 90.0% | 144 / −0.766 / 0.0% |
+  | **2–5d age slice, $10k/≤0.35** | 66 | 20 | 35 | −0.895 | – | −1.000 | 0.0% | −1.000 | −0.886 | 95.5% | 63 / −0.890 / 0.0% |
+
+  Top-event share is n/a for the PASS gate in a darker sense than thinness:
+  EVERY cell's total per-event pnl is negative, so no single event carries a
+  positive edge (the flagship $10k/≤0.35 cell: 34 events, total −$12.1k on
+  167 entries; the BEST event is +$689 on 2 entries
+  ("another-us-strike-on-venezuela-by"), 7 of 167 entries won vs a mean
+  burst price of 0.218 — break-even winRate at that price is ~22%).
+- **Age split (the first OOS round's empty check, now graded):** the 2–5d
+  restriction has real mass this time (n=37–166 per size/price cell) and is
+  consistently WORSE than age 0–1d, not better (e.g. $10k/≤0.35: 0–1d
+  ret −0.618 / p5 −0.840 vs 2–5d ret −0.895 / p5 −1.000). The in-sample
+  candidate's key gate is anti-confirmatory where it can finally be tested.
+- **Verdict per the pre-registered gate: FAIL on all 12 candidate cells ×
+  both age windows and on the whole 480-cell grid (0/464 gradeable cells
+  with p5 > 0).** The floor-ranked $10k/≤0.35 edge does NOT transport:
+  in-sample p5 +0.39..+0.57 territory and +105% realistic ret with ~35%
+  winRate becomes OOS p5 −0.875, P(>0) 0.0%, ret −0.727, winRate 7.8%, on
+  167 entries over 34 previously-unseen events, delay-realistic
+  (executable ≈ 91% of entries) −0.812. This is resolution, not padding:
+  with 196 resolved fresh events (vs the 60-slug pull's ~8 gradeable) the
+  20-event floor is met everywhere, both time halves are negative, and the
+  best-case single events are drops in a negative pool. It is consistent
+  with the honest episode-level regrade that flagged the in-sample edge as
+  one-episode-concentrated: the edge is event-specific to the in-sample
+  Iran-war-screen tape, not a property of "big fresh longshot bursts on
+  military markets". The shipped $5k/≤0.35/5d/3mkt cell is in the same
+  boat OOS (ret −0.550, P(>0) 2.0%) — both OOS pulls agree.
+- Caveats kept honest: (1) whole-burst retReal benefits from entries a
+  delayed copy couldn't make (engineParity note) — but delay-realistic is
+  equally negative here, so the direction doesn't depend on that;
+  (2) the expansion roster's ≤5-per-stem diversity cap spread the
+  Iran-war-screen era thin (45 iran slugs across distinct questions), which
+  is exactly the population transport asks about; (3) hold-to-resolution
+  pricing is the sweep convention unchanged from in-sample, so the
+  comparison is apples-to-apples; (4) episode-level regrouping (outstanding
+  from the feature/episodeScope side) could only INFLATE event count
+  stability checks — it cannot turn a −0.87 p5 positive.
+- Watcher/live: unchanged. The paper-gate remains the money gate; both OOS
+  pulls now say the category-wide military rule's expectation
+  (+116% realistic, in-sample) is falsified outside its original events —
+  the live paper sample, not more backtest cells, is the deciding evidence
+  for or against keeping the rule live-published. Cells frozen (shipped
+  cells keep pinned in-sample grades, printing only): none.
+
+
