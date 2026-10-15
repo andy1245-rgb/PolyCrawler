@@ -6,7 +6,8 @@ strategy:
   minNetUsd: 5000
   maxEntryPrice: 0.35
   copyRule: all
-  sizing: mirrorPct
+  sizing: fixed
+  fixedUsd: 100
   mirrorPct: 1.0
   maxPositionUsd: 1000
   maxTotalExposureUsd: null
@@ -16,6 +17,7 @@ strategy:
   maxAccountAgeDays: 5.0
   maxMarketsSoFar: 3
   accountSelection: rule
+  followAdds: false
   eventSlugFilter:
     - iran
     - israel
