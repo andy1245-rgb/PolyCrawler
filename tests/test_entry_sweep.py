@@ -63,6 +63,35 @@ def test_evaluateSmallSampleAndSplits() -> None:
     assert esw.evaluate(pl.DataFrame(bad), rng)["ret"] is None
 
 
+def test_dataFingerprint_coversKeywordTuple(tmp_path: Path) -> None:
+    # headline of the keyword-generalization commit was untested: the cache
+    # fingerprint must change with the event-keyword tuple, else the
+    # military frame and the non-military complement collide on one cache
+    # name (fields must exist on disk — the fingerprint stats each file)
+    for name in ("fills.parquet", "markets.parquet"):
+        pl.DataFrame({"x": [1]}).write_parquet(tmp_path / name)
+    dirs = [str(tmp_path)]
+    base = esw.dataFingerprint(dirs, keywords=("iraq",))
+    assert base != esw.dataFingerprint(dirs, keywords=("iran",))
+    assert base != esw.dataFingerprint(dirs, keywords=None)      # complement
+    assert base == esw.dataFingerprint(dirs, keywords=("iraq",))  # stable
+
+
+def test_evaluate_is_row_order_deterministic() -> None:
+    # group_by row order used to feed rng.randrange indexing; evaluate now
+    # sorts events on a stable key, so shuffled input rows must not move
+    # any digit
+    rows = [entry(T0 + timedelta(hours=3 * i), 0.2 + 0.01 * (i % 7),
+                  event=f"iran-strike-{i % 19}", usd=5000 + (i % 3) * 1000)
+            for i in range(60)]
+    a = esw.evaluate(pl.DataFrame(rows), random.Random(7))
+    b = esw.evaluate(pl.DataFrame(list(reversed(rows))), random.Random(7))
+    shuffled = list(rows)
+    random.Random(0).shuffle(shuffled)
+    c = esw.evaluate(pl.DataFrame(shuffled), random.Random(7))
+    assert a == b == c
+
+
 def test_gridCellsExpandsCartesian() -> None:
     cells = esw.gridCells({"minUsd": [1000], "maxPrice": [0.2, 0.35],
                            "ageDays": [1], "marketsSoFar": [2]})

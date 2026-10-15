@@ -56,11 +56,16 @@ Run: `uv run python scripts/research/episodeResample.py [--k 5] [--refresh]
 The account-overlap graph **over-merges**, not splinters: 1,615 of 4,908
 ≥$5k-burst accounts trade ≥2 military slugs and 9 accounts trade ≥20, so
 K=5 welds everything into one episode. The ground truth check nevertheless
-passes: the iran-Feb-2026 calendar episode (10 slugs with iran signals in
+passes: the iran-Feb-2026 reference set (10 slugs with iran signals in
 Feb-2026, re-derived from the tape — us-strikes-iran-by, the february-28,
 january-9/16/31 and march-31 israel-strikes-iran rungs, the two khamenei
 rungs, usisrael-strikes-iran-by, will-the-iranian-regime-fall-by-march-31)
 sits in **1 episode group at K=5** — far from the ≥3 splinter failure bar.
+Honesty note on the reference set itself: it is **substring match**
+("iran" in the lowercased slug) **plus a calendar gate** (≥$5k burst signal
+in Feb-2026) — deliberately a name+calendar probe, not the account-overlap
+unit definition; the episode units stay data-derived and this set only
+checks that the graph does not splinter the ladder.
 
 ### K sensitivity
 
@@ -150,10 +155,13 @@ verdict, which is exactly the finding.)
    on the same tape.
 2. **Any extension claim must now clear episode-level gates** — and they
    must be run at a documented K with the ground-truth check passing
-   (`episodeResample.groundTruthCheck`: iran-Feb-2026 must occupy <3 episode
-   groups; only K≤20 qualifies here), including ex-top-episode stats:
-   over-merge swings both ways and the world is bridged by professional
-   multi-market accounts (9 accounts trade ≥20 military slugs).
+   (`episodeResample.groundTruthCheck`: the iran-Feb-2026 reference set must
+   occupy <3 episode groups; on this tape that holds well past the old
+   K≤20 claim — the data-derived gate K* is the largest K in the fine
+   sensitivity grid that still qualifies, printed by the script), including
+   ex-top-episode stats: over-merge swings both ways and the world is
+   bridged by professional multi-market accounts (9 accounts trade ≥20
+   military slugs).
 3. **Concentration from the account side**: 1,615/4,908 ≥$5k-burst accounts
    trade ≥2 military slugs; the military "category" edge and the
    multi-slug professional population are the same population. Treat
@@ -167,9 +175,14 @@ verdict, which is exactly the finding.)
   re-justified against the printed sensitivity table and ground truth.
 - Episode-level and event-level point estimates are identical; only the
   distributional claims (P, p5, p95, ex-top) are resamplings of the unit.
-- Event-level P/p5 come from entrySweep's own evaluator: polars `group_by`
-  row order feeds its RNG indexing, so event-level digits can move ~±0.01
-  across runs (episode-level is order-sorted and strictly deterministic).
+- Event-level P/p5 come from entrySweep's own evaluator: its polars
+  `group_by` row order feeds RNG indexing (`rng.randrange` over the event
+  list), so event-level digits used to drift with row order — **measured
+  ~±0.04–0.08 on p5 across runs** (an earlier version of this paragraph
+  said ~±0.01: wrong; the episode-level column was never affected). Fixed
+  here: `evaluate` now sorts the event table on a stable key (`eventSlug`)
+  before the RNG consumes it, so **both levels are deterministic** and the
+  published digits are reproducible to the last digit.
 - Fills keep arriving; these numbers re-baseline the shipped cell as of the
   `entries_v2_df8efad228` cache built from `[data, data/universe]` on
   2026-10-15 (cell n=431 vs the review's 434 — drift, same shape), and

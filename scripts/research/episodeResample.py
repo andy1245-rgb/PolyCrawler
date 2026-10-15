@@ -28,8 +28,8 @@ Ground truth: the iran-Feb-2026 date-ladder episode must not splinter into
 >=3 separate episode groups at K=5; episodeGroups() prints the episode table
 so a human can check the cluster is one process.
 
-Run: uv run python scripts/research/episodeResample.py [--k 5] [--refresh]
-     [--md] [--out research/episodeResample.md]
+Run: uv run python scripts/research/episodeResample.py [--k K*] [--refresh]
+     [--bands] [--md] [--out research/episodeResample.md]
 """
 
 import argparse
@@ -169,8 +169,11 @@ def episodeTable(groups: list[list[str]], entries: pl.DataFrame,
 
 def kSensitivity(entries: pl.DataFrame, slugs: list[str],
                  iranFebSlugs: set[str], ks: list[int]) -> pl.DataFrame:
-    """How the graph's connectedness moves with K — printed alongside the
-    ground-truth assert so the choice is a documented, checked judgment."""
+    """How the graph's connectedness moves with K. The grid used to be a
+    coarse 9-point sample that skipped most of 11-49 — where the iran-Feb
+    reference set stops being one group (i.e. where verdicts flip); the
+    default grid now walks the whole 1-40 window on a step-2 grid plus
+    50/100, so the published K* covers every admissible integer."""
     edges = sharedAccountEdges(entries)
     rows = []
     for k in ks:
@@ -182,13 +185,30 @@ def kSensitivity(entries: pl.DataFrame, slugs: list[str],
     return pl.DataFrame(rows)
 
 
+def sensitivityKs() -> list[int]:
+    """Fine sensitivity grid: step 2 across 1..40 (both the K=5 and the old
+    K=20 anchors must be in it, so 1-5 is enumerated explicitly) plus the
+    50/100 spots the old table had."""
+    fine = [1, 2, 3, 5] + sorted(set([k for k in range(4, 41, 2)]))
+    return fine + [50, 100]
+
+
+def dataDerivedK(sensTable: pl.DataFrame) -> int | None:
+    """K* := the largest K in the sensitivity grid that keeps the iran-Feb
+    ground-truth reference at <= 2 episode groups (no splinter). Returns the
+    data-derived gate; None if no grid point qualifies (caller decides)."""
+    ok = sensTable.filter(pl.col("iranFebEpisodes") <= 2)
+    return None if ok.is_empty() else int(ok["k"].max())
+
+
 def iranFebEpisodeSlugs(entries: pl.DataFrame) -> set[str]:
-    """Ground-truth reference cluster (data-derived, not name-matching):
-    slugs with >=$5k burst signals inside calendar Feb-2026 that moon the
-    iran date-ladder process. Selection: signals in Feb-2026 AND the slug
-    contains 'iran' — exactly the pre-review claim '333/434 signals belong
-    to one calendar episode (iran-Feb-2026: 10 slugs of the Iran
-    date-ladder)'."""
+    """Ground-truth REFERENCE set, and honesty about how it is built: it is
+    a substring match ('iran' inside the lowercased slug) plus a calendar
+    gate (the slug held a >=$5k burst signal in Feb-2026). That IS a
+    name-matching rule — name match + calendar window — deliberately kept
+    as a cheap, reproducible probe of the date-ladder process; the episode
+    units themselves remain data-derived (account overlap), and this set is
+    only used to check that the graph does not splinter the ladder."""
     feb = entries.filter((pl.col("ts").dt.year() == 2026)
                          & (pl.col("ts").dt.month() == 2))
     return set(feb.filter(pl.col("eventSlug").str.to_lowercase()
@@ -197,8 +217,11 @@ def iranFebEpisodeSlugs(entries: pl.DataFrame) -> set[str]:
 
 def groundTruthCheck(groups: list[list[str]], truthSlugs: set[str],
                      k: int = DEFAULT_K) -> dict[str, Any]:
-    """Pre-review assert: the iran-Feb-2026 episode must not splinter into
-    >=3 groups at K=5 (over-merge is reported, under-merge is a failure)."""
+    """Pre-review check: the iran-Feb-2026 reference set must not splinter
+    into >=3 groups (over-merge is reported, under-merge is a failure).
+    On failure this prints the diagnostic (the episode table above is
+    already on stdout) and exits nonzero, instead of a bare assert that
+    could crash under -O with no message and gave no nonzero-clean path."""
     owners: list[str] = []
     for s in truthSlugs:
         for i, g in enumerate(groups, 1):
@@ -206,10 +229,17 @@ def groundTruthCheck(groups: list[list[str]], truthSlugs: set[str],
                 owners.append(f"ep{i}")
                 break
     episodeCount = len(set(owners))
-    assert episodeCount < 3, (
-        f"ground truth violated: iran-Feb-2026 split into {episodeCount} "
-        f"episode groups ({sorted(set(owners))}) at K={k} — tune K or edit "
-        f"configs/episodeOverrides.yaml, then re-run")
+    if episodeCount >= 3:
+        # raising SystemExit(<message>) both prints the diagnostic to stderr
+        # (the episode table above is already on stdout) and exits nonzero,
+        # unlike the old bare assert (crashed without a diagnostic path)
+        raise SystemExit(
+            f"\nFAIL: ground truth violated — the iran-Feb-2026 reference "
+            f"set ({len(truthSlugs)} slugs) split into {episodeCount} "
+            f"episode groups ({sorted(set(owners))}) at K={k}.\n"
+            f"Inspect the episode table above (member slugs are listed "
+            f"per episode); tune --k or edit configs/episodeOverrides.yaml, "
+            f"then re-run.")
     return {"k": k, "truthSlugs": len(truthSlugs), "episodes": episodeCount,
             "groups": sorted(set(owners)), "ok": True}
 
@@ -302,6 +332,46 @@ def measureCell(entries: pl.DataFrame, cell: dict[str, Any],
     return row
 
 
+def kBand(mil: pl.DataFrame, cells: list[dict[str, Any]], ks: list[int],
+          kGate: int, overrides: dict[str, list] | None = None,
+          boots: int = EPISODE_BOOTS) -> pl.DataFrame:
+    """Episode-level P(>0) as a BAND across the GT-admissible K window
+    (k <= K*), one row per (k, cell). Single-point P(>0) headlines are what
+    the coarse grid produced; inside the previously-unpublished 11-49 gap
+    the verdict moves, so the band is the honest publication. Edges are
+    computed once (k-independent); per k only labels/stats are recomputed."""
+    universe = mil.filter(pl.col("usd") >= EPISODE_MIN_USD)
+    slugs = sorted(universe["eventSlug"].unique().to_list())
+    edges = sharedAccountEdges(universe)
+    rows = []
+    for k in ks:
+        if k > kGate:
+            continue
+        labels = episodeLabels(
+            episodeGroups(edges, slugs, k=k, overrides=overrides))
+        for cell in cells:
+            df = filterCellCustom(mil, cell)
+            ep = episodeStats(df, labels, boots=boots)
+            rows.append({"k": k, "cell": cell["label"],
+                         "episodes": ep["episodes"], "epP": ep["epP"],
+                         "epP5": ep["epP5"],
+                         "exTopRet": ep["exTopRet"], "exTopP": ep["exTopP"]})
+    return pl.DataFrame(rows)
+
+
+BAND_HEAD = (
+    "| K | cell | episodes | P(>0) episode | p5 episode | ex-top ret | "
+    "ex-top P |\n"
+    "|---:|---|---:|---:|---:|---:|---:|\n")
+
+
+def bandMarkdown(band: pl.DataFrame) -> str:
+    return BAND_HEAD + "".join(
+        f"| {r['k']} | {r['cell']} | {r['episodes']} | {r['epP']} | "
+        f"{r['epP5']} | {r['exTopRet']} | {r['exTopP']} |\n"
+        for r in band.iter_rows(named=True))
+
+
 MARKDOWN_HEAD = (
     "| cell | n | events | ret | ep | P(>0) event | p5 event | P(>0) episode "
     "| p5 episode | p95 episode | ex-top episode | ex-top ret | ex-top P | "
@@ -325,13 +395,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", action="append", default=None)
     parser.add_argument("--refresh", action="store_true")
-    parser.add_argument("--k", type=int, default=DEFAULT_K)
+    parser.add_argument("--k", type=int, default=None,
+                        help="episode gate; default = data-derived K*, the "
+                             "largest K in the sensitivity grid keeping the "
+                             "iran-Feb reference at <=2 groups")
     parser.add_argument("--boots", type=int, default=EPISODE_BOOTS)
     parser.add_argument("--md", action="store_true", help="emit a markdown table")
     parser.add_argument("--out", default=None,
                         help="write the markdown to this file as well")
     parser.add_argument("--sensitivity", action="store_true",
-                        help="print the K-sensitivity table of the graph")
+                        help="(the fine K grid is always printed now; kept "
+                             "for script compatibility)")
+    parser.add_argument("--bands", action="store_true",
+                        help="print the episode P(>0) band across the "
+                             "GT-admissible K window for shipped/$10k cells")
     args = parser.parse_args()
     dirs = [str(p) for p in esw.dirsFromConfig(ROOT, args.data_dir, esw.RESEARCH_FETCH)]
     overrides = loadOverrides()
@@ -341,27 +418,52 @@ def main() -> None:
     universe = mil.filter(pl.col("usd") >= EPISODE_MIN_USD)
     slugs = sorted(universe["eventSlug"].unique().to_list())
     edges = sharedAccountEdges(universe)
-    groups = episodeGroups(edges, slugs, k=args.k, overrides=overrides)
+
+    # the FULL fine grid is the published sensitivity; the gate K* is read
+    # off it (data-derived), not chosen by hand
+    sens = kSensitivity(universe, slugs, iranFebEpisodeSlugs(universe),
+                        sensitivityKs())
+    with pl.Config(tbl_rows=60):
+        print(f"\n-- K sensitivity, fine grid (episodes / largest episode / "
+              f"iranFeb groups) --")
+        print(sens)
+
+    if args.k is None:
+        kGate = dataDerivedK(sens)
+        if kGate is None:
+            print("\nFAIL: no K in the sensitivity grid keeps the iran-Feb "
+                  "reference at <=2 groups — no data-derived gate exists; "
+                  "pass --k or edit configs/episodeOverrides.yaml.",
+                  flush=True)
+            raise SystemExit(1)
+        print(f"K* (data-derived gate) = {kGate}")
+    else:
+        kGate = args.k
+
+    groups = episodeGroups(edges, slugs, k=kGate, overrides=overrides)
     labels = episodeLabels(groups)
 
-    print(f"\n-- episode graph (K={args.k}, accounts with >=${EPISODE_MIN_USD} "
+    print(f"\n-- episode graph (K={kGate}, accounts with >=${EPISODE_MIN_USD} "
           f"bursts in both slugs, overrides={sum(len(v) for v in overrides.values())} entries) --",
           flush=True)
     table = episodeTable(groups, universe, labels)
     with pl.Config(tbl_rows=60, fmt_str_lengths=120, tbl_width_chars=240):
         print(table)
     truthSlugs = iranFebEpisodeSlugs(universe)
-    truth = groundTruthCheck(groups, truthSlugs, k=args.k)
-    print(f"ground truth: iran-Feb-2026 calendar episode = {truth['truthSlugs']} slugs "
-          f"-> {truth['episodes']} episode group(s) at K={args.k} "
+    truth = groundTruthCheck(groups, truthSlugs, k=kGate)
+    print(f"ground truth: iran-Feb-2026 reference set = {truth['truthSlugs']} slugs "
+          f"-> {truth['episodes']} episode group(s) at K={kGate} "
           f"({'PASS' if truth['ok'] else 'FAIL'}, no splinter into >=3)")
 
-    if args.sensitivity:
-        sens = kSensitivity(universe, slugs, truthSlugs,
-                            ks=[1, 2, 3, 5, 8, 10, 20, 50, 100])
-        with pl.Config(tbl_rows=30):
-            print("\n-- K sensitivity (episodes / largest episode / iranFeb groups) --")
-            print(sens)
+    if args.bands:
+        bandCells = [c for c in CELLS if c["universe"] == "military"]
+        band = kBand(mil, bandCells, sensitivityKs(), kGate,
+                     overrides=overrides, boots=args.boots)
+        print("\n-- episode P(>0) band across the GT-admissible K window "
+              f"(k <= {kGate}) --")
+        print(bandMarkdown(band))
+
+    print(f"\n-- cells ({args.boots} episode bootstraps, seed {SEED}) --")
 
     print(f"\n-- cells ({args.boots} episode bootstraps, seed {SEED}) --")
     rows = []

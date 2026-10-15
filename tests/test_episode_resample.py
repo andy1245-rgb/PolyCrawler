@@ -190,9 +190,26 @@ def test_syntheticIranFebLadder_checks_and_gate() -> None:
 
 
 def test_groundTruthCheck_fails_on_splinter() -> None:
+    # not a bare assert anymore: the diagnostic is printed and the process
+    # exits nonzero (SystemExit), so a failing run can't vanish silently
     groups = [["iran-a"], ["iran-b"], ["iran-c"], ["other"]]
-    with pytest.raises(AssertionError, match="split into 3"):
-        ers.groundTruthCheck(groups, {"iran-a", "iran-b", "iran-c"}, k=5)
+    with pytest.raises(SystemExit, match="split into 3"):
+        ers.groundTruthCheck(groups, {"iran-a", "iran-b", "iran-c"}, k=50)
+    assert ers.groundTruthCheck(groups, {"iran-a", "iran-b"}, k=50)["ok"] is True
+
+
+def test_dataDerivedK_reads_the_fine_grid() -> None:
+    ks = ers.sensitivityKs()
+    # the fine grid covers the published gap that verdict-flipping cells
+    # lived in: step-2 coverage of 1..40 plus the 50/100 spots, and the
+    # K=5 / K=20 anchors of the old tables
+    assert ks[:4] == [1, 2, 3, 5] and 20 in ks and 30 in ks
+    assert ks[-2:] == [50, 100] and all(k in ks for k in range(6, 41, 2))
+    frame = pl.DataFrame({"k": [1, 3, 5, 8, 20, 30], "iranFebEpisodes":
+                          [1, 1, 1, 2, 2, 3]})
+    assert ers.dataDerivedK(frame) == 20   # largest admissible K
+    frame2 = pl.DataFrame({"k": [5, 10], "iranFebEpisodes": [3, 4]})
+    assert ers.dataDerivedK(frame2) is None  # nothing admissible
 
 
 def test_main_cells_constant_and_self_consistent() -> None:

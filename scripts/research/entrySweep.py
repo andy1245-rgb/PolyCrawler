@@ -97,16 +97,6 @@ def militaryMarketsTable(markets: pl.DataFrame,
     """Markets whose eventSlug passes the keyword filter. keywords=None
     selects the complement: every eventSlug matching NONE of MILITARY (the
     non-military control universe)."""
-    isMil = lambda s: any(k in (s or "").lower() for k in MILITARY)
-    pred = (lambda s: any(k in (s or "").lower() for k in keywords))
-    return bases if keywords is None else markets.filter  # placeholder
-
-
-def militaryMarketsTable(markets: pl.DataFrame,
-                         keywords: tuple[str, ...] | None = MILITARY) -> pl.DataFrame:
-    """Markets whose eventSlug passes the keyword filter. keywords=None
-    selects the complement: every eventSlug matching NONE of MILITARY (the
-    non-military control universe)."""
     bases = markets.unique("marketId", keep="last").select(
         "marketId", "eventSlug", "winner",
         pl.coalesce("resolvedAt", "endDate").alias("resolvedAt"))
@@ -205,7 +195,14 @@ def evaluate(df: pl.DataFrame, rng: random.Random) -> dict[str, Any]:
         return row
     ev = (df.group_by("eventSlug")
           .agg(pnl=(pl.col("retReal") * 100).sum(), cap=pl.len() * 100.0)
-          .with_columns(r=pl.col("pnl") / pl.col("cap")))
+          .with_columns(r=pl.col("pnl") / pl.col("cap"))
+          # group_by row order feeds rng.randrange(indexing) below; unsorted
+          # key order is an implementation detail of the hash table, which
+          # made event-level digits drift ~±0.04-0.08 on p5 across runs.
+          # Sorting on a stable key before the RNG consumes the row list
+          # makes the event-level bootstrap deterministic, same promise the
+          # episode-level stats already keep.
+          .sort("eventSlug"))
     events = list(ev.iter_rows(named=True))
     boots = []
     for _ in range(BOOTS):
