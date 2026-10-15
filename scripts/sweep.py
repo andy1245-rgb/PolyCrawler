@@ -8,7 +8,7 @@ from pathlib import Path
 
 import polars as pl
 
-from polycrawler.backtest import BacktestParams, loadInputs, prepareBacktest, resolveDataDirs
+from polycrawler.backtest import BacktestParams, dirsFromConfig, loadInputs, prepareBacktest
 from polycrawler.config import loadConfig
 from polycrawler.sweep import formatSweep, loadSweep, runSweep, writeSweep
 
@@ -31,7 +31,7 @@ def main() -> None:
     loaded = loadConfig(configPath)
     spec = loadSweep(sweepPath)
     params = BacktestParams.model_validate(loaded.strategy.model_dump())
-    dirs = resolveDataDirs(root, args.data_dir, loaded.fetch.dataDir)
+    dirs = dirsFromConfig(root, args.data_dir, loaded)
     fills, markets, accounts, clusterMap = loadInputs(dirs)
     endTs = fills.select(pl.col("ts").max()).collect().item()
     startTs = datetime(

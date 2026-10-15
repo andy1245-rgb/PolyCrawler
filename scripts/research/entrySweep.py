@@ -30,11 +30,16 @@ from typing import Any
 
 import polars as pl
 import yaml
+from polycrawler.backtest import dirsFromConfig
+from polycrawler.config import Config, FetchConfig
 
 t0 = time.time()
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_DIR = ROOT / "data" / "entrySweep"
-TOP_DIR = ROOT / "data"
+
+# Research cells span the accrued universe (data/ + data/universe); dir
+# resolution goes through the config system like the engine side.
+RESEARCH_FETCH = Config(fetch=FetchConfig(dataDirs=["data", "data/universe"]))
 
 FILL_WINDOW_SEC = 300
 HALF_SPLIT = datetime(2025, 6, 1, tzinfo=timezone.utc)
@@ -52,15 +57,33 @@ GRID_AXES = {
     "marketsSoFar": [1, 2, 3, 5],
 }
 
+# Cache layout version: every change to the fingerprint recipe (or the cached
+# frame schema) bumps this, invalidating existing entries_*.parquet caches.
+CACHE_SCHEMA_VERSION = 2
+
 
 # ------------------------------------------------------------------ build ---
 
+def _rows(path: Path) -> int:
+    """Metadata-only row count: scan_parquet with len() reads the parquet
+    footer, not the rows (verified ~1ms on a 500k-row file)."""
+    return int(pl.scan_parquet(path).select(pl.len()).collect().item())
+
+
 def dataFingerprint(dirs: list[str]) -> str:
+    """Cache key over the build inputs (fills.parquet + markets.parquet of
+    every dir): path, size, mtime and row count of each. An equal-size
+    in-place rewrite changes the mtime/row count and misses the cache."""
     digest = hashlib.sha1()
+    digest.update(f"entrySweepCacheSchema{CACHE_SCHEMA_VERSION}".encode())
     for d in dirs:
-        p = Path(d) / "fills.parquet"
-        digest.update(str(Path(d).resolve()).encode())
-        digest.update(str(p.stat().st_size).encode())
+        for name in ["fills.parquet", "markets.parquet"]:
+            p = Path(d) / name
+            digest.update(str(Path(d).resolve()).encode())
+            digest.update(name.encode())
+            digest.update(str(p.stat().st_size).encode())
+            digest.update(str(p.stat().st_mtime_ns).encode())
+            digest.update(str(_rows(p)).encode())
     return digest.hexdigest()[:10]
 
 
@@ -127,7 +150,7 @@ def buildEntries(dirs: list[str]) -> pl.DataFrame:
 
 def loadEntries(dirs: list[str], refresh: bool) -> pl.DataFrame:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache = CACHE_DIR / f"entries_{dataFingerprint(dirs)}.parquet"
+    cache = CACHE_DIR / f"entries_v{CACHE_SCHEMA_VERSION}_{dataFingerprint(dirs)}.parquet"
     if cache.exists() and not refresh:
         frame = pl.read_parquet(cache)
         print(f"loaded {frame.height} cached entries ({cache.name})", flush=True)
@@ -194,7 +217,7 @@ def runSweep(entries: pl.DataFrame, grid: dict[str, list[Any]]) -> pl.DataFrame:
         row = dict(cell)
         row.update(evaluate(filterCell(entries, cell), rng))
         rows.append(row)
-    return pl.DataFrame(rows).sort("ret", descending=True, nulls_last=True)
+    return pl.DataFrame(rows).sort(["p5", "ret"], descending=True, nulls_last=True)
 
 
 def main() -> None:
@@ -204,7 +227,7 @@ def main() -> None:
     parser.add_argument("--grid", default="configs/sweeps/militaryEntryGrid.yaml")
     parser.add_argument("--limit", type=int, default=30)
     args = parser.parse_args()
-    dirs = args.data_dir or [str(TOP_DIR), str(TOP_DIR / "universe")]
+    dirs = [str(p) for p in dirsFromConfig(ROOT, args.data_dir, RESEARCH_FETCH)]
     spec = yaml.safe_load(Path(args.grid).read_text()) or {}
     grid = spec.get("grid") or {}
     entries = loadEntries(dirs, args.refresh)

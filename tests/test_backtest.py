@@ -6,6 +6,7 @@ import pytest
 
 from polycrawler.backtest import (
     BacktestParams,
+    dirsFromConfig,
     loadMarketFills,
     paramsHash,
     rollingWindows,
@@ -436,3 +437,24 @@ def test_loadSweepDefaultsToMedianEventReturn(tmp_path) -> None:
     assert spec.objective == "medianEventReturn"
     assert spec.minTrades == 20
     assert spec.minEvents == 3
+
+
+def test_dirsFromConfigPrecedence(tmp_path) -> None:
+    class Fetch:
+        dataDir = "data"
+        dataDirs = ["data", "data/universe"]
+
+    class Loaded:
+        fetch = Fetch()
+
+    both = dirsFromConfig(tmp_path, None, Loaded())
+    assert [d.name for d in both] == ["data", "universe"]
+    # a --data-dir request wins over the config's list
+    one = dirsFromConfig(tmp_path, ["data/oos"], Loaded())
+    assert [d.name for d in one] == ["oos"]
+    # default configs carry no dataDirs -> single dataDir remains
+    class Bare(Fetch):
+        dataDirs = None
+
+    bare = dirsFromConfig(tmp_path, None, type("L", (), {"fetch": Bare()})())
+    assert bare == [tmp_path / "data"]

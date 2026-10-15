@@ -17,6 +17,9 @@ class FetchConfig(BaseModel):
     fromDate: date = date(2024, 1, 1)
     closedOnly: bool = True
     dataDir: str = "data"
+    # Data dirs a backtest spans (defaults to [dataDir]). Accrued universes span
+    # several: the military rule cell lives across data/ and data/universe/.
+    dataDirs: list[str] | None = None
 
 
 class DiscoveryConfig(BaseModel):
