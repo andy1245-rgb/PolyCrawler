@@ -1,0 +1,130 @@
+# ops-extension: pre-registered eventSlugFilter extension keywords.
+#
+# ORDERING RULE (hall rule): this file was written and committed BEFORE any
+# family PnL number was computed or inspected. It is derived ONLY from
+# mechanism reasoning: "state-use-of-force verbs on by-date numeric ladders"
+# (researchNewMarkets.md rank-1 mechanism, §1.3 / §2 Rank 1). No cell
+# retReal / p5 / P(>0) figure is quoted or referenced anywhere in this file.
+#
+# Semantics are the shipped substring semantics, untouched:
+#   strategy.py takeEntry/selectRuleAccounts: any(word in eventSlug.lower()
+#   for word in eventSlugFilter)  — and the identical expression in
+#   scripts/research/entrySweep.py militaryMarketsTable().
+#
+# Episode-name-free: all keywords below are structural verbs/predicates of
+# "a state (or organized armed actor) applies military force by a deadline",
+# never the name of any country, conflict, or episode. Named entities
+# (yemen, cartel, mexico, sudan, chad, niger, assad, ...) are deliberately
+# NOT in this tuple.
+
+# ---------------------------------------------------------------- shipped ---
+# The 15 shipped military keywords (configs/militaryBacktest.yaml and the
+# entrySweep.py MILITARY tuple). They are NOT repeated in the extension
+# tuple below; they are recorded here to define the incremental accounting
+# (a NEW match = slug that matches extension keywords but not these).
+# Behavior of these 15 stays bit-identical in every shipped config.
+shipped:
+  - iran
+  - israel
+  - hezbollah
+  - houthi
+  - lebanon
+  - hamas
+  - gaza
+  - ukraine
+  - russia
+  - taiwan
+  - pakistan-military
+  - maduro
+  - venezuela
+  - nato
+  - strike
+
+# -------------------------------------------------------------- extension ---
+extension:
+  - invasion        # also covers invasion-of / invades (substring superset)
+  - offensive
+  - coup
+  - martial-law
+  - missile         # also covers missile-test (substring superset)
+  - attack          # covers attack-by / attacks (substring superset; see risks)
+  - annex           # covers annexation
+  - occupation
+  - operation       # ground-operation / military-operation (see risks)
+  - capture
+  - military        # generic verb-subject; superset of shipped pakistan-military
+
+# ------------------------------------------------------- coverage ledger ---
+# Families the shipped 15 already match via substring containment (do NOT
+# re-shoot these inside new slugs; the extension tuple only adds matching
+# power it can prove is currently unmatched):
+alreadyCoveredByShipped:
+  strike:            # shipped substring "strike" already matches
+    - us-strikes-iran-by-*          # and all date-ladder strike ladders
+    - us-strikes-yemen-by-*
+    - thailand-strikes-cambodia(-by-*)
+    - houthi-strike-on-israel(-by-*)
+    - pakistan-military-strike-on-india(-by-*)
+    - the token recorded in the review as "antimmodation" (already inside
+      the shipped filter via the "strike"/"houthi" substrings)
+  houthi: houthi-* events
+  pakistan-military: pakistan-military-* events (subsumed by "military",
+    hence the generalized "military" keyword is a superset, not a redefinition)
+  iran/israel/gaza/...: the named conflict families (chapter-pinned)
+
+# Explicit risk register (substring containment cuts both ways):
+risks:
+  - note: "operation" is the loosest verb: it can match non-force events
+    (e.g. rescue/evacuation operations). Accepted pre-registration risk —
+    the grounding step (commit 2) counts what it actually catches, and any
+    non-force episode found there is reported as a negative control, never
+    silently dropped.
+  - note: "attack" can appear in non-military phrasing. Same treatment:
+    report, do not prune.
+  - note: "military" generalizes the shipped pakistan-military token; the
+    incremental evaluation subtracts all shipped matches before reporting.
+  - note: keywords are substring keywords; a bare "annex" also hits
+    "anniversary"-shaped slugs (none expected in a force-event universe;
+    verified at the grounding step).
+
+# ---------------------------------------------------------------- omitted ---
+omitted:
+  - sanction:      state coercion but NOT use-of-force; different mechanism
+                   label (capital-control enforcement). If the extension
+                   passes, it is a separate later test, not part of this one.
+  - named entities (yemen, cartel, mexico, assad, sudan, ...): the review's
+                   constraint is episode-name-free, structural verbs only.
+  - leftovers from the mechanism memo's first tuple (border, capture-like
+                   nouns kept only when verifiable verbs) were resolved into
+                   the tuple above or rejected here: "border" is a place
+                   noun, not a force predicate.
+
+# ------------------------------------------------- evaluation contract ---
+evaluation:
+  # Incremental-only: the honest metric is extension-cell samples MINUS the
+  # identical non-extension samples (extension matches minus shipped matches,
+  # per slug and per event). A cell run on all extension-matched entries is
+  # NOT accepted as evidence; every reported cell is the delta.
+  incrementalOnly: true
+  # Gate block, written before any number was seen (verbatim constraint text
+  # carried from the two-pass review):
+  gates:
+    episodeLevel: "episode-level acceptance >=5 new episodes with P(>0) >=0.90"
+    episodeThresholdQuoted: "episode-level P(>=0.83)"
+    # Operative reading: per-episode bootstrap P(>0) for each NEW episode;
+    # the family passes only if (a) >=5 new episodes exist and (b) the
+    # per-episode P(>0) threshold clears at BOTH 0.83 and 0.90 reporting:
+    # count(new episodes with P(>0) > 0.83) and their exact values are
+    # published for every episode regardless of pass/fail.
+    incrementalEvents: "the extension must newly match >=5 events the shipped
+                        15 do NOT match (n and event counts reported only in
+                        the delta, never as the all-extension cell)"
+    exTopEpisode: "ex-top-episode > 0: after leaving out the largest group's
+                   samples (leave-one-episode-out of the biggest episode),
+                   the delta family's mean return stays positive"
+    feeStress: "per-category taker fee + 10% slippage stress. DISCLOSED GAP:
+                fills.parquet has no fee column, and the shipped slippage
+                model is a flat 50bps — per-category real fees CANNOT be
+                modeled from the local tape. Stress is therefore computed as
+                rets recomputed at +10% (1000bps) one-way haircut with the
+                gap stated in the write-up; pass = mean delta ret stays > 0."
