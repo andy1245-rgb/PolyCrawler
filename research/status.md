@@ -193,11 +193,16 @@ Progress against the list above:
    (txHash, wallet, shares, usd). Sample plan: 2 seeded days/month.
    Progress: 2023-10 → mid-2025 cached in data/raw/dune/onchainBuy_*.csv;
    full V2-era spread comes in background. Analysis runs after pull.
-4. **Relay origin tracing end-to-end on the universe**: full
-   `pc2 discover --config configs/eventUniverse.yaml` run in progress
-   (logs/discoverUniverseRelay.log) — Relay hash probes (144) resolved, user
-   paging crawling under the API's rate limits. Written before route
-   retirement 24 Nov 2026.
+4. **Relay origin tracing end-to-end on the universe**: DONE — the full
+   `pc2 discover --config configs/eventUniverse.yaml` run completed
+   (2h25m, mostly Relay rate-limit pacing: 241 rate-limit backoffs). 144
+   bridge deposits → 142 origins resolved (2 unresolved), 142 origin users
+   across 10 chains (base 49, BSC 12, bases 13, avalanche 10, arbitrum,
+   op-stack, blast...), 170 sibling recipients (28 outside the flagged set,
+   17 first funding after the split), 6 clusters (largest: 28-account
+   coTrade cluster), 383 coTrade edges. Solver payout re-verified on-chain
+   via Alchemy (payoutConfirmed True). Route logged before the 24 Nov 2026
+   v2 retirement; data captured under data/raw/relay/.
 5. **Engines wired + military rule folded in.** `pc2 backtest` / `pc2 sweep`
    now drive the real engines; `BacktestParams`/`StrategyConfig` gained
    `maxAccountAgeDays`, `maxMarketsSoFar`, `eventSlugFilter`,
@@ -213,6 +218,18 @@ Progress against the list above:
    delayed/backward-asof tape price + 50bps and mirrors later fills (adds),
    while the research cell prices with the wallet's own burst average and
    next-tick fills; also possible drift in the refreshed fills.
+   **RESOLVED (same session):** three compounding causes found:
+   (a) the sweep recheck confirmed the research cell unchanged on refreshed
+   fills (+104% ret / +115% retReal, winRate 34.6%);
+   (b) intra-burst mirroring (`followAdds`) destroys the edge at mirrorPct
+   (`fixed` sizing + `followAdds=false` = paper/live semantics; −19.4% →
+   +24.9% on the stale data);
+   (c) the stale-data runs were racing `discover`'s parquet rewrite.
+   On the FINAL discovery output `configs/militaryBacktest.yaml` reproduces
+   the research cell nearly exactly: 429 trades vs 433 entries, winRate
+   36.4% vs 34.6%, returnOnDeployed +119.3% vs +116% realistic, 27 vs 29
+   events. Engine and research pipelines are now interchangeable for the
+   military rule; parity discrepancies from this point are real signal.
 
 ## 8. Gotchas learned this session
 
