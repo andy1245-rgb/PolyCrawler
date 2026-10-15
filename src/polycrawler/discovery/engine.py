@@ -14,6 +14,7 @@ import httpx
 import polars as pl
 
 from polycrawler.config import Config, DiscoveryConfig
+from polycrawler.discovery.mergeScores import mergePlan
 from polycrawler.fetch import (
     alchemyBlockNumber,
     alchemyUrl,
@@ -984,6 +985,8 @@ def buildFundingClusters(
     minSuspiciousAccounts: int,
     fundingHops: int,
     minFundingUsd: float,
+    minCoTrades: int = 2,
+    mergeThresholds: dict[str, int] | None = None,
     fundedByParent: dict[str, set[str]] | None = None,
     originGroups: dict[str, set[str]] | None = None,
     siblingGroups: dict[str, set[str]] | None = None,
@@ -1025,6 +1028,24 @@ def buildFundingClusters(
         and row.fromAddr not in blocked
         and row.toAddr not in blocked
     ]
+    # Merge scoring lives in discovery/mergeScores.py: same edge sets, same
+    # unconditional "one strong money-flow edge merges" semantics at the
+    # shipped defaults (thresholds are audit plumbing, no shipped knob), but
+    # every merge now carries its provenance - which edge kind, endpoints,
+    # evidence count, and the rule that fired (or did not).
+    plan = mergePlan(
+        usable,
+        accounts,
+        blocked,
+        eoaFunders,
+        grandparents,
+        originGroups,
+        siblingGroups,
+        coTrades,
+        fundingHops,
+        minCoTrades,
+        thresholds=mergeThresholds,
+    )
     uf = {account: account for account in accounts}
     linkOf: dict[str, set[str]] = {account: set() for account in accounts}
 
@@ -1038,61 +1059,26 @@ def buildFundingClusters(
             account = nxt
         return root
 
-    def union(left: str, right: str, kind: str) -> None:
-        leftRoot = find(left)
-        rightRoot = find(right)
+    # Edge presence drives linkType labels (identical to the old union() call
+    # side effect: the kind was recorded whenever the edge existed); whether
+    # the edge actually unions two components comes from the decision record.
+    # The anchor rule below is the existing smallest-member rule: roots are
+    # always the alphabetically first member of a component.
+    for edge in plan.edges:
+        linkOf[edge.left].add(edge.kind)
+        linkOf[edge.right].add(edge.kind)
+    for decision in plan.decisions:
+        if not decision.merge:
+            continue
+        leftRoot = find(decision.left)
+        rightRoot = find(decision.right)
         if leftRoot != rightRoot:
             if leftRoot < rightRoot:
                 uf[rightRoot] = leftRoot
             else:
                 uf[leftRoot] = rightRoot
-        linkOf[left].add(kind)
-        linkOf[right].add(kind)
-
-    byFunder: dict[str, set[str]] = defaultdict(set)
-    byCashOut: dict[str, set[str]] = defaultdict(set)
-    for row in usable:
-        if row.toAddr in accounts and row.fromAddr not in blocked:
-            byFunder[row.fromAddr].add(row.toAddr)
-        if row.fromAddr in accounts and row.toAddr not in accounts and row.toAddr not in blocked:
-            byCashOut[row.toAddr].add(row.fromAddr)
-        if row.fromAddr in accounts and row.toAddr in accounts:
-            union(row.fromAddr, row.toAddr, "direct")
-
-    def linkGroup(group: set[str], kind: str) -> None:
-        members = sorted(account for account in group if account in accounts)
-        if len(members) < 2:
-            return
-        for other in members[1:]:
-            union(members[0], other, kind)
-
-    for group in byFunder.values():
-        linkGroup(group, "sharedFunder")
-    for group in byCashOut.values():
-        linkGroup(group, "sharedCashOut")
-
-    reached: dict[str, set[str]] = defaultdict(set)
-    if fundingHops >= 2:
-        for funder, group in byFunder.items():
-            if funder not in eoaFunders:
-                continue
-            for grand in grandparents.get(funder, ()):
-                if grand in blocked or grand == funder:
-                    continue
-                for account in group:
-                    if account in accounts:
-                        reached[grand].add(account)
-        for group in reached.values():
-            linkGroup(group, "hop")
-
-    for group in originGroups.values():
-        linkGroup(group, "sharedOrigin")
-    for group in siblingGroups.values():
-        linkGroup(group, "originSibling")
-    for left, right in coTrades or []:
-        left, right = left.lower(), right.lower()
-        if left in uf and right in uf and left != right:
-            union(left, right, "coTrade")
+    byFunder = plan.byFunder
+    reached = plan.reached
 
     components: dict[str, list[str]] = defaultdict(list)
     for account in accounts:
@@ -1392,6 +1378,7 @@ def runFunding(
             minSuspiciousAccounts=config.discovery.minSuspiciousAccounts,
             fundingHops=config.discovery.fundingHops,
             minFundingUsd=minimum,
+            minCoTrades=config.discovery.minCoTrades,
         )
         fundedByParent: dict[str, set[str]] = {}
         for row in parentRows:
@@ -1416,13 +1403,14 @@ def runFunding(
             hubs,
         )
         fillsPath = Path(dataDir) / "fills.parquet"
-        coTrades = (
+        coTrades = (  # (left, right, matched windows) triples: evidence per edge
             coTradePairs(
                 pl.read_parquet(fillsPath),
                 suspicious,
                 splitCutoff(config.splitDate),
                 config.discovery.coTradeWindowSec,
                 config.discovery.minCoTrades,
+                withCounts=True,
             )
             if fillsPath.exists()
             else []
@@ -1439,6 +1427,7 @@ def runFunding(
             minSuspiciousAccounts=config.discovery.minSuspiciousAccounts,
             fundingHops=config.discovery.fundingHops,
             minFundingUsd=minimum,
+            minCoTrades=config.discovery.minCoTrades,
             fundedByParent=fundedByParent,
             originGroups=linked.originGroups,
             siblingGroups=linked.siblingGroups,
@@ -1887,7 +1876,8 @@ def coTradePairs(
     cutoff: datetime,
     windowSec: int,
     minCount: int,
-) -> list[tuple[str, str]]:
+    withCounts: bool = False,
+) -> list[tuple[str, str]] | list[tuple[str, str, int]]:
     if windowSec < 0 or minCount <= 0 or len(accounts) < 2 or fills.height == 0:
         return []
     buys = fills.filter(
@@ -1907,7 +1897,12 @@ def coTradePairs(
                 matched = matchTimes(leftTimes, sorted(byAccount[right]), windowSec)
                 if matched:
                     counts[(left, right)] += matched
-    return [pair for pair, count in sorted(counts.items()) if count >= minCount]
+    pairs = sorted(counts.items())
+    if withCounts:
+        # Evidence triples for mergeScores: (left, right, matched windows),
+        # same (left, right) lexicographic order as the bare pair list.
+        return [(left, right, count) for (left, right), count in pairs if count >= minCount]
+    return [pair for pair, count in pairs if count >= minCount]
 
 
 def _stamp(ts: int | None) -> datetime | None:
