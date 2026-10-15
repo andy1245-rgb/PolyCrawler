@@ -44,14 +44,30 @@ def researchDataDirs(root: Path | None = None, requested=None) -> list[Path]:
     return dirsFromConfig(root or ROOT, requested, RESEARCH_FETCH)
 
 
-def militaryMarketsFrame(dirs: list[Path]) -> pl.DataFrame:
+def militaryMarketsFrame(dirs: list[Path],
+                         keywords: tuple[str, ...] | None = MILITARY
+                         ) -> pl.DataFrame:
     """markets.parquet across all dirs, unique'd keep='last', restricted to
     military/strike events: eventSlug joined winner + resolvedAt, exactly the
-    column set annotate()/entries joins use."""
+    column set annotate()/entries joins use.
+
+    Keyword-parametrized (episodeScope merge, one-owner decision): the
+    default MILITARY tuple keeps the military sweep universe; any other
+    keyword tuple filters by 'any(keyword in slug)'; keywords=None selects
+    the COMPLEMENT — every eventSlug matching none of MILITARY — which is
+    the non-military control universe (single caller: entrySweep's
+    loadEntries(dirs, refresh, keywords=None))."""
     markets = (pl.concat([pl.read_parquet(f"{d}/markets.parquet")
                           for d in dirs], how="diagonal_relaxed")
                .unique("marketId", keep="last")
                .select("marketId", "eventSlug", "winner",
                        pl.coalesce("resolvedAt", "endDate").alias("resolvedAt")))
+    if keywords is None:
+        return markets.filter(pl.col("eventSlug").map_elements(
+            lambda s: not isMilitarySlug(s), return_dtype=pl.Boolean))
+    if keywords == MILITARY:
+        return markets.filter(pl.col("eventSlug").map_elements(
+            isMilitarySlug, return_dtype=pl.Boolean))
     return markets.filter(pl.col("eventSlug").map_elements(
-        isMilitarySlug, return_dtype=pl.Boolean))
+        lambda s: any(k in (s or "").lower() for k in keywords),
+        return_dtype=pl.Boolean))

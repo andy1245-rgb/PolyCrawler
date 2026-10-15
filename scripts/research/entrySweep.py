@@ -35,12 +35,17 @@ t0 = time.time()
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_DIR = ROOT / "data" / "entrySweep"
 
-# shared research-data plumbing (dir resolution + the military markets frame)
+# shared research-data plumbing (dir resolution + the keyword-parametrized
+# markets frame — one owner per the merge plan: the keyword param lives in
+# researchData.militaryMarketsFrame, entrySweep delegates through it)
 _sharedSpec = importlib.util.spec_from_file_location(
     "researchData", ROOT / "scripts" / "research" / "researchData.py")
 researchData = importlib.util.module_from_spec(_sharedSpec)
 sys.modules["researchData"] = researchData
 _sharedSpec.loader.exec_module(researchData)
+
+MILITARY = researchData.MILITARY          # single source, re-exported
+RESEARCH_FETCH = researchData.RESEARCH_FETCH  # dirs scope ([data, data/universe])
 
 FILL_WINDOW_SEC = 300
 HALF_SPLIT = datetime(2025, 6, 1, tzinfo=UTC)  # 2025-06-01 split, same instant as before
@@ -67,12 +72,19 @@ def _rows(path: Path) -> int:
     return int(pl.scan_parquet(path).select(pl.len()).collect().item())
 
 
-def dataFingerprint(dirs: list[str]) -> str:
+def dataFingerprint(dirs: list[str], keywords: tuple[str, ...] | None = MILITARY) -> str:
     """Cache key over the build inputs (fills.parquet + markets.parquet of
-    every dir): path, size, mtime and row count of each. An equal-size
-    in-place rewrite changes the mtime/row count and misses the cache."""
+    every dir): path, size, mtime and row count of each (one stat() per
+    file). An equal-size in-place rewrite changes the mtime/row count and
+    misses the cache. The event-keyword tuple is part of the key too
+    (merged fingerprint recipe: main's stat-per-file digest + the branch's
+    keywords digest): the cache only stores entries of one keyword
+    universe, so a different filter (or the non-military complement) must
+    produce a different cache name."""
     digest = hashlib.sha1()
     digest.update(f"entrySweepCacheSchema{CACHE_SCHEMA_VERSION}".encode())
+    digest.update(("keywords:" + ",".join(keywords) if keywords
+                   else "keywords:none(exclude)").encode())
     for d in dirs:
         for name in ["fills.parquet", "markets.parquet"]:
             st = (Path(d) / name).stat()  # one stat per file, both fields from it
@@ -84,9 +96,9 @@ def dataFingerprint(dirs: list[str]) -> str:
     return digest.hexdigest()[:10]
 
 
-def buildEntries(dirs: list[str]) -> pl.DataFrame:
+def buildEntries(dirs: list[str], keywords: tuple[str, ...] | None = MILITARY) -> pl.DataFrame:
     lazy = pl.concat([pl.scan_parquet(f"{d}/fills.parquet") for d in dirs], how="diagonal_relaxed")
-    milMarkets = researchData.militaryMarketsFrame(dirs)
+    milMarkets = researchData.militaryMarketsFrame(dirs, keywords)
     firstSeen = lazy.group_by("account").agg(firstTs=pl.col("ts").min()).collect()
     entries = (
         lazy.filter(pl.col("side") == "BUY").drop("side")
@@ -107,7 +119,7 @@ def buildEntries(dirs: list[str]) -> pl.DataFrame:
                .with_columns(
                    marketsSoFar=pl.col("marketId").is_first_distinct().cast(pl.Int32).cum_sum().over("account"),
                    ageDays=(pl.col("ts") - pl.col("firstTs")).dt.total_seconds() / 86400,
-                   isMilitary=pl.lit(True),
+                   isMilitary=(keywords is not None),
                    won=pl.col("outcome") == pl.col("winner"),
                    ret=pl.when(pl.col("winner").is_null()).then(None)
                    .when(pl.col("outcome") == pl.col("winner")).then(1 / pl.col("price") - 1)
@@ -134,14 +146,17 @@ def buildEntries(dirs: list[str]) -> pl.DataFrame:
     return entries.drop("firstTs")
 
 
-def loadEntries(dirs: list[str], refresh: bool) -> pl.DataFrame:
+def loadEntries(dirs: list[str], refresh: bool,
+                keywords: tuple[str, ...] | None = MILITARY) -> pl.DataFrame:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache = CACHE_DIR / f"entries_v{CACHE_SCHEMA_VERSION}_{dataFingerprint(dirs)}.parquet"
+    tag = "" if keywords is not None else "_nonmil"
+    cache = CACHE_DIR / (f"entries{tag}_v{CACHE_SCHEMA_VERSION}_"
+                         f"{dataFingerprint(dirs, keywords)}.parquet")
     if cache.exists() and not refresh:
         frame = pl.read_parquet(cache)
         print(f"loaded {frame.height} cached entries ({cache.name})", flush=True)
         return frame
-    frame = buildEntries(dirs)
+    frame = buildEntries(dirs, keywords)
     frame.write_parquet(cache)
     print(f"built {frame.height} entries -> {cache} ({time.time() - t0:.0f}s)", flush=True)
     return frame
@@ -165,7 +180,14 @@ def evaluate(df: pl.DataFrame, rng: random.Random) -> dict[str, Any]:
         return row
     ev = (df.group_by("eventSlug")
           .agg(pnl=(pl.col("retReal") * 100).sum(), cap=pl.len() * 100.0)
-          .with_columns(r=pl.col("pnl") / pl.col("cap")))
+          .with_columns(r=pl.col("pnl") / pl.col("cap"))
+          # group_by row order feeds rng.randrange(indexing) below; unsorted
+          # key order is an implementation detail of the hash table, which
+          # made event-level digits drift ~±0.04-0.08 on p5 across runs.
+          # Sorting on a stable key before the RNG consumes the row list
+          # makes the event-level bootstrap deterministic, same promise the
+          # episode-level stats already keep.
+          .sort("eventSlug"))
     events = list(ev.iter_rows(named=True))
     boots = []
     for _ in range(BOOTS):
