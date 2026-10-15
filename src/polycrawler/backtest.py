@@ -51,6 +51,7 @@ class BacktestParams(BaseModel):
     maxMarketsSoFar: int | None = None
     eventSlugFilter: list[str] | None = None
     accountSelection: Literal["discovery", "rule"] = "discovery"
+    followAdds: bool = True
 
 
 tradeSchema = {

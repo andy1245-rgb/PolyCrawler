@@ -71,6 +71,7 @@ class StrategyConfig(BaseModel):
     maxMarketsSoFar: int | None = None
     eventSlugFilter: list[str] | None = None
     accountSelection: Literal["discovery", "rule"] = "discovery"
+    followAdds: bool = True
 
 
 class Config(BaseModel):

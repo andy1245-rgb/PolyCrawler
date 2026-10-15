@@ -122,7 +122,8 @@ def planBuy(
 ) -> tuple[str, float]:
     """`trigger` copies the shares seen so far; `add` copies only this fill."""
     if burst.copying:
-        if params.sizing == "mirrorPct":
+        follow = getattr(params, "followAdds", True)
+        if follow and params.sizing == "mirrorPct":
             return "add", fillSize
         return "skip", 0.0
     row = {

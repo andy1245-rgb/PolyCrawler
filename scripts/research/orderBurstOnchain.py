@@ -258,25 +258,58 @@ def pullEtherscanDay(client: httpx.Client, day: date, fromB: int, toB: int) -> l
 
 def pullAlchemyDay(client: httpx.Client, url: str, fromB: int, toB: int) -> list[dict]:
     """V2-era day pull: V2/V3 exchanges plus the still-live V1 addresses,
-    both topics in one filter per 10-block window."""
+    both topics in one filter per 10-block window. Windows go out in batched
+    JSON-RPC arrays (8 per HTTP POST) to cut request overhead."""
     addresses = list(EXCHANGES_V2.values()) + list(EXCHANGES_V1.values())
     topics = [[V2_TOPIC, V1_TOPIC]]
 
     windows = [(b, min(b + 9, toB)) for b in range(fromB, toB + 1, 10)]
+    batches = [windows[i:i + 8] for i in range(0, len(windows), 8)]
     logs = []
     startT = time.time()
 
-    def pullWindow(window: tuple[int, int]) -> list[dict]:
+    def fetchBatch(batch: list[tuple[int, int]]) -> list[dict]:
+        payload = [
+            {"jsonrpc": "2.0", "id": i, "method": "eth_getLogs", "params": [{
+                "address": addresses, "fromBlock": hex(b), "toBlock": hex(e),
+                "topics": topics}]}
+            for i, (b, e) in enumerate(batch)
+        ]
+        for attempt in range(4):
+            try:
+                rows = client.post(url, json=payload).json()
+                results = {item.get("id"): item.get("result") for item in rows}
+                if any(v is None for v in results.values()):
+                    # a missing result inside the batch -> re-tag missing windows one by one
+                    logs = []
+                    for i, (b, e) in enumerate(batch):
+                        result = results.get(i)
+                        if result is None:
+                            single = fetchWindow((b, e))
+                            logs.extend(single)
+                        else:
+                            logs.extend(result)
+                    return logs
+                return [log for result in results.values() for log in (result or [])]
+            except Exception:
+                time.sleep(1.0 + attempt)
+        small: list[dict] = []
+        for window in batch:
+            small.extend(fetchWindow(window))
+        return small
+
+    def fetchWindow(window: tuple[int, int]) -> list[dict]:
         return _rpc(client, url, "eth_getLogs", [{
             "address": addresses, "fromBlock": hex(window[0]),
             "toBlock": hex(window[1]), "topics": topics}]) or []
 
-    with ThreadPoolExecutor(max_workers=6) as ex:
-        for i, chunk in enumerate(ex.map(pullWindow, windows)):
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        for i, chunk in enumerate(ex.map(fetchBatch, batches)):
             logs.extend(chunk)
-            if (i + 1) % 200 == 0:
+            if (i + 1) % 25 == 0:
                 rate = (i + 1) / (time.time() - startT)
-                print(f"  {i + 1}/{len(windows)} windows, {len(logs)} logs, {rate:.1f} win/s", flush=True)
+                done = min((i + 1) * 8, len(windows))
+                print(f"  {done}/{len(windows)} windows, {len(logs)} logs, {rate:.1f} batch/s", flush=True)
     print(f"alchemy: {len(windows)} windows -> {len(logs)} OrderFilled logs", flush=True)
     return logs
 
