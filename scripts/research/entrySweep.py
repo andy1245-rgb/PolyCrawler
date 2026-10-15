@@ -70,12 +70,17 @@ def _rows(path: Path) -> int:
     return int(pl.scan_parquet(path).select(pl.len()).collect().item())
 
 
-def dataFingerprint(dirs: list[str]) -> str:
+def dataFingerprint(dirs: list[str], keywords: tuple[str, ...] | None = MILITARY) -> str:
     """Cache key over the build inputs (fills.parquet + markets.parquet of
     every dir): path, size, mtime and row count of each. An equal-size
-    in-place rewrite changes the mtime/row count and misses the cache."""
+    in-place rewrite changes the mtime/row count and misses the cache.
+    The event-keyword tuple is part of the key too: the cache only stores
+    entries of one keyword universe, so a different filter (or the
+    non-military complement) must produce a different cache name."""
     digest = hashlib.sha1()
     digest.update(f"entrySweepCacheSchema{CACHE_SCHEMA_VERSION}".encode())
+    digest.update(("keywords:" + ",".join(keywords) if keywords
+                   else "keywords:none(exclude)").encode())
     for d in dirs:
         for name in ["fills.parquet", "markets.parquet"]:
             p = Path(d) / name
@@ -87,19 +92,37 @@ def dataFingerprint(dirs: list[str]) -> str:
     return digest.hexdigest()[:10]
 
 
-def militaryMarketsTable(markets: pl.DataFrame) -> pl.DataFrame:
+def militaryMarketsTable(markets: pl.DataFrame,
+                         keywords: tuple[str, ...] | None = MILITARY) -> pl.DataFrame:
+    """Markets whose eventSlug passes the keyword filter. keywords=None
+    selects the complement: every eventSlug matching NONE of MILITARY (the
+    non-military control universe)."""
+    isMil = lambda s: any(k in (s or "").lower() for k in MILITARY)
+    pred = (lambda s: any(k in (s or "").lower() for k in keywords))
+    return bases if keywords is None else markets.filter  # placeholder
+
+
+def militaryMarketsTable(markets: pl.DataFrame,
+                         keywords: tuple[str, ...] | None = MILITARY) -> pl.DataFrame:
+    """Markets whose eventSlug passes the keyword filter. keywords=None
+    selects the complement: every eventSlug matching NONE of MILITARY (the
+    non-military control universe)."""
     bases = markets.unique("marketId", keep="last").select(
         "marketId", "eventSlug", "winner",
         pl.coalesce("resolvedAt", "endDate").alias("resolvedAt"))
+    if keywords is None:
+        return bases.filter(pl.col("eventSlug").map_elements(
+            lambda s: not any(k in (s or "").lower() for k in MILITARY),
+            return_dtype=pl.Boolean))
     return bases.filter(pl.col("eventSlug").map_elements(
-        lambda s: any(k in (s or "").lower() for k in MILITARY), return_dtype=pl.Boolean))
+        lambda s: any(k in (s or "").lower() for k in keywords), return_dtype=pl.Boolean))
 
 
-def buildEntries(dirs: list[str]) -> pl.DataFrame:
+def buildEntries(dirs: list[str], keywords: tuple[str, ...] | None = MILITARY) -> pl.DataFrame:
     lazy = pl.concat([pl.scan_parquet(f"{d}/fills.parquet") for d in dirs], how="diagonal_relaxed")
     markets = pl.concat(
         [pl.read_parquet(f"{d}/markets.parquet") for d in dirs], how="diagonal_relaxed")
-    milMarkets = militaryMarketsTable(markets)
+    cellMarkets = militaryMarketsTable(markets, keywords)
     cols = ["ts", "account", "marketId", "outcome", "side", "size", "price"]
     firstSeen = lazy.group_by("account").agg(firstTs=pl.col("ts").min()).collect()
     entries = (
@@ -116,12 +139,12 @@ def buildEntries(dirs: list[str]) -> pl.DataFrame:
         .drop("burst", "shares")
         .collect()
     )
-    entries = (entries.join(milMarkets, on="marketId").join(firstSeen, on="account")
+    entries = (entries.join(cellMarkets, on="marketId").join(firstSeen, on="account")
                .sort("account", "ts")
                .with_columns(
                    marketsSoFar=pl.col("marketId").is_first_distinct().cast(pl.Int32).cum_sum().over("account"),
                    ageDays=(pl.col("ts") - pl.col("firstTs")).dt.total_seconds() / 86400,
-                   isMilitary=pl.lit(True),
+                   isMilitary=(keywords is not None),
                    won=pl.col("outcome") == pl.col("winner"),
                    ret=pl.when(pl.col("winner").is_null()).then(None)
                    .when(pl.col("outcome") == pl.col("winner")).then(1 / pl.col("price") - 1)
@@ -148,14 +171,17 @@ def buildEntries(dirs: list[str]) -> pl.DataFrame:
     return entries.drop("firstTs")
 
 
-def loadEntries(dirs: list[str], refresh: bool) -> pl.DataFrame:
+def loadEntries(dirs: list[str], refresh: bool,
+                keywords: tuple[str, ...] | None = MILITARY) -> pl.DataFrame:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache = CACHE_DIR / f"entries_v{CACHE_SCHEMA_VERSION}_{dataFingerprint(dirs)}.parquet"
+    tag = "" if keywords is not None else "_nonmil"
+    cache = CACHE_DIR / (f"entries{tag}_v{CACHE_SCHEMA_VERSION}_"
+                         f"{dataFingerprint(dirs, keywords)}.parquet")
     if cache.exists() and not refresh:
         frame = pl.read_parquet(cache)
         print(f"loaded {frame.height} cached entries ({cache.name})", flush=True)
         return frame
-    frame = buildEntries(dirs)
+    frame = buildEntries(dirs, keywords)
     frame.write_parquet(cache)
     print(f"built {frame.height} entries -> {cache} ({time.time() - t0:.0f}s)", flush=True)
     return frame
