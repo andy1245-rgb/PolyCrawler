@@ -58,6 +58,7 @@ Run:  uv run python scripts/research/orderBurstOnchain.py [--per-month 2]
 import calendar
 import csv
 import json
+import os
 import random
 import sys
 import time
@@ -85,6 +86,9 @@ V1_TOPIC = "0xd0a08e8c493f9c94f29311604c9de1b4e8c8d4c06bd0c789af57f2d65bfec0f6"
 V2_TOPIC = "0xd543adfd945773f1a62f74f0ee55a5e3b9b1a28262980ba90b1a89f2ea84d8ee"
 V2_DEPLOY = datetime(2026, 3, 31, tzinfo=timezone.utc)  # ctfExchangeV2 goes live
 SAMPLE_START = datetime(2023, 10, 1, tzinfo=timezone.utc)
+PER_MONTH = 2  # single sampling constant: the puller and the monitor use it
+
+PLAN_PATH = DUNE_DIR / "samplePlan.json"
 
 ETHERSCAN = "https://api.etherscan.io/v2/api"
 ALCHEMY_HOST = "polygon-mainnet.g.alchemy.com"
@@ -376,11 +380,24 @@ def pullDay(client: httpx.Client, url: str, day: date, tip: int) -> tuple[int, l
 
 
 def writeCsv(path: Path, fields: list[str], rows: list[dict]) -> None:
+    """Atomic write: rows land on `<path>.tmp`, then os.replace() swaps it
+    onto the target, so a concurrent reader never sees a half-written file
+    (the day caches are read by the monitor/analysis while pulling)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="") as fh:
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=fields)
         w.writeheader()
         w.writerows(rows)
+    os.replace(tmp, path)
+
+
+def writeJson(path: Path, data) -> None:
+    """Same atomic tmp + os.replace() pattern for JSON side files."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, indent=1) + "\n")
+    os.replace(tmp, path)
 
 
 # ---------------------------------------------------------------- enrich ---
@@ -481,7 +498,6 @@ def sampleDays(monthsFrom: tuple[int, int], perMonth: int, seed: int = 7) -> lis
 
 
 def _envKey(name: str) -> str:
-    import os
     found = os.environ.get(name, "").strip()
     if found:
         return found
@@ -500,7 +516,7 @@ def _envKey(name: str) -> str:
 
 def main() -> None:
     args = sys.argv[1:]
-    perMonth = int(args[args.index("--per-month") + 1]) if "--per-month" in args else 2
+    perMonth = int(args[args.index("--per-month") + 1]) if "--per-month" in args else PER_MONTH
     monthsFrom = (SAMPLE_START.year, SAMPLE_START.month)
     if "--months-from" in args:
         y, m = args[args.index("--months-from") + 1].split("-")
@@ -518,7 +534,12 @@ def main() -> None:
     tip = int(str(head), 16)
 
     days = sampleDays(monthsFrom, perMonth)
-    print(f"sample plan: {len(days)} days ({perMonth}/month)", flush=True)
+    # Publish the resolved plan ONCE before pulling: downstream consumers (the
+    # monitor runs the analysis plan off this file, not a recomputation) read
+    # the actual plan instead of re-deriving it with a possibly-drifting
+    # seed/contract.
+    writeJson(PLAN_PATH, [d.isoformat() for d in days])
+    print(f"sample plan: {len(days)} days ({perMonth}/month) -> {PLAN_PATH.name}", flush=True)
     if not skip:
         for d in days:
             if (DUNE_DIR / f"onchainBuy_{d.isoformat()}.csv").exists():
