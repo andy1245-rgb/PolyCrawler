@@ -111,16 +111,29 @@ def addRetReal(entries: pl.DataFrame, tape: pl.DataFrame) -> pl.DataFrame:
                           .otherwise(-1.0)))
 
 
-def main() -> None:
+def parseArgs():
+    """CLI parsing, only on the real command line (the monitor calls
+    main(dir_=...) directly with its own in-process arguments)."""
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", default=str(ROOT / "data" / "raw" / "dune"))
+    parser.add_argument("--dir", default=None,
+                        help="directory holding the onchainBuy_*.csv day caches")
     parser.add_argument("--data-dir", action="append", default=None)
-    args = parser.parse_args()
-    dir_ = Path(args.dir)
+    return parser.parse_args()
+
+
+def main(dir_: str | Path | None = None) -> None:
+    # dir_ argument (the monitor's in-process call) wins over --dir > default
+    # and skips argv parsing entirely.
+    requested = None
+    if dir_ is None:
+        args = parseArgs()
+        requested = args.data_dir
+        dir_ = args.dir or ROOT / "data" / "raw" / "dune"
+    dir_ = Path(dir_)
     # fills/markets dirs routed through the config system (same precedence as
     # the engine); defaults keep the data/ + data/universe research scope.
-    fillDirs = dob.researchDataDirs(ROOT, args.data_dir)
+    fillDirs = dob.researchDataDirs(ROOT, requested)
     sampledDays = len(list(dir_.glob("onchainBuy_*.csv")))
     daysWithLegs = sum(1 for p in dir_.glob("onchainBuy_*.csv")
                        if pl.read_csv(p, infer_schema_length=0).height > 1)
