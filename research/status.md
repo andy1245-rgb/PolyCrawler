@@ -412,7 +412,7 @@ tape** (daily report restarts it):
   process, monitor above fires the analysis when it exits); OOS fetch
   (`configs/oosFetch.yaml`) re-attempted in background.
 
-### session 2026-10-15 (later still): two review passes applied (C1–C7)
+### session 2026-10-15 (later still): two review passes applied (C1–C6)
 The bb645e9..ec6131f diff went through two reviews (correctness + design);
 both approved fixes are now in, one commit each:
 - **C1/c87cbfe** — puller `writeCsv()` writes through `<path>.tmp` +
@@ -451,11 +451,16 @@ both approved fixes are now in, one commit each:
 - **C6/3627a5f** — scoped ruff cleanup: entrySweep + engineParity only
   (`from datetime import UTC`, stale `# noqa: E402` dropped; entrySweep's
   unused `json` import and dead `cols` variable were dropped with the C3
-  extraction). Deliberately NO repo-wide pass — monitor/analysis/dune
-  scripts still carry UP017s.
+  extraction). Deliberately NO repo-wide pass — dune scripts still carry
+  UP017s (monitor/analysis/oosTransport lost theirs with the 2026-10-15
+  re-review follow-ups).
 - Full suite after all of the above: 108 passed (`uv run pytest`).
-- **Re-review of C1–C7 is pending** — the fixes applied themselves have not
-  been re-reviewed.
+- Re-review correction (the re-review #18 ran; heading above enumerates
+  C1–C6, no C7): the C4 "no legs" exit was broken for the all-header-only
+  case — pl.concat raised its ValueError before the guard — and is now
+  fixed inside loadLegs; and the oosTransport `RESEARCH_FETCH` resolution
+  regression (`esw.` no longer re-exports it) was caught in the same
+  re-review. Both are fixed by follow-up commits.
 
 ### oosTransport: OOS pull cannot grade the floor-ranked candidate cells (2026-10-15, later)
 
@@ -523,4 +528,36 @@ both approved fixes are now in, one commit each:
 - Cells frozen: none. The shipped $5k/≤0.35/5d/3mkt line keeps its in-sample
   grade; no change to the live watcher rule. Next OOS pull should target
   event count (≥150 resolved slugs) before re-attempting the $10k verdict.
+  (Data observation recorded as such: age-2-5d being empty and big OOS bursts
+  sitting on day-0/1 accounts is a property of the OOS tape, not a rule
+  change — see the older-noted bullets above.)
+
+### 9.1 oosTransport follow-up: oosExpansion roster staged (2026-10-15, later still)
+
+- Discovery: crawled gamma `/events` by tag (closed=true, volume-desc, 24
+  military-adjacent tag_slugs through the repo's own `HttpSession` pacing
+  adapter at 4 req/s with 429 penalize, 79 successful 100-event pages + deep-
+  pagination-wall retries on a few tags), filtered slugs with the
+  SHIPPED 15-keyword military tuple from `scripts/research/researchData.py`,
+  kept resolved-only closed events with volume ≥ $20k, and excluded every
+  slug already in `data/` (13), `data/universe` (81), `data/oos` (60) and
+  configs (`oosFetch`, `militaryUniverse`, `eventUniverse`). Crawl yield:
+  1,280 fresh resolved military slugs.
+- Roster: `configs/oosExpansionFetch.yaml`, 200 slugs with a ≤5-per-stem
+  diversity cap so date-ladder clones ("israel-strikes-iran-by-december-31",
+  ...) don't drown one question. Episode spread: iran 45, ukraine-russia 45,
+  gaza-hamas 25, venezuela-maduro 20, houthis-yemen 15, hezbollah-lebanon 15,
+  pakistan-india 10, syria 10, nato 8, taiwan 5, other-strike 2.
+  Schema matches `oosFetch.yaml` (same `splitDate: 2026-01-01`;
+  `fetch.dataDir: data/oosExpansion` — a separate dir, so the 60 oosFetch
+  slugs stay untouched alongside).
+- Smoke test (no bulk pull): `pc2 fetch --config configs/oosExpansionFetch.yaml
+  --event-slug <3 of them> --set fetch.dataDir=data/oosProbe` → 3 slugs all
+  resolved (`markets 11, fills 12063, accounts 2090`), markets.parquet carried
+  winner + resolvedAt for each; probe dir deleted afterward. Config load +
+  slug-uniqueness + zero-overlap check: PASS.
+- Next step: launch the full 200-slug fetch into `data/oosExpansion` under
+  supervision, then re-run the floor-ranked candidate-track evaluation with
+  the same entrySweep/oosTransport machinery as the 60-slug pull. No PnL
+  claims from this subsection; the fetch itself is not yet run.
 

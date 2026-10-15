@@ -41,6 +41,15 @@ esw = importlib.util.module_from_spec(_spec)
 sys.modules["esw"] = esw
 _spec.loader.exec_module(esw)
 
+# researchData by-path too — the C3 extraction moved RESEARCH_FETCH there, and
+# entrySweep no longer re-exports it (reaching through esw broke with an
+# AttributeError caught in re-review).
+_spec = importlib.util.spec_from_file_location(
+    "researchData", ROOT / "scripts" / "research" / "researchData.py")
+researchData = importlib.util.module_from_spec(_spec)
+sys.modules["researchData"] = researchData
+_spec.loader.exec_module(researchData)  # RESEARCH_FETCH (fetch.dataDirs)
+
 from polycrawler.backtest import dirsFromConfig  # noqa: E402  (same routing as entrySweep)
 
 AGE_WINDOWS = {  # name -> (minAge exclusive, maxAge inclusive)
@@ -122,7 +131,7 @@ def main() -> None:
     parser.add_argument("--data-dir", action="append", default=None)
     parser.add_argument("--refresh", action="store_true")
     args = parser.parse_args()
-    dirs = [str(p) for p in dirsFromConfig(ROOT, args.data_dir, esw.RESEARCH_FETCH)]
+    dirs = [str(p) for p in dirsFromConfig(ROOT, args.data_dir, researchData.RESEARCH_FETCH)]
     entries = esw.loadEntries(dirs, args.refresh)
     entries = addLanded(entries, dirs)
     print(f"entries {entries.height} landed300 {100 * entries['landed300'].mean():.2f}% "

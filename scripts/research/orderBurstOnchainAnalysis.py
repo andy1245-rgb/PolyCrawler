@@ -23,7 +23,7 @@ import json
 import random
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
@@ -55,9 +55,11 @@ def loadLegs(dir_: Path) -> tuple[pl.DataFrame, int, int]:
     header-only check, so no second read for a height count.
 
     Header-only days count as sampled (a zero-leg day is a valid pull
-    result); days whose rows all lack a ts are not counted as legs. If no
-    day has any legs, exit with a clear message instead of letting
-    pol.concat raise its ValueError."""
+    result); days whose rows all lack a ts are not counted as legs. If
+    every cache is header-only the frame list is empty and pl.concat would
+    raise on an empty list — exit with a clear message here instead (rows
+    that merely lack a ts still yield frames, and remain covered by
+    main()'s no-legs exit)."""
     caches = sorted(dir_.glob("onchainBuy_*.csv"))
     if not caches:
         sys.exit(f"no onchainBuy_*.csv under {dir_}; run orderBurstOnchain.py first")
@@ -71,6 +73,9 @@ def loadLegs(dir_: Path) -> tuple[pl.DataFrame, int, int]:
             pl.col("shares").cast(pl.Float64), pl.col("price").cast(pl.Float64),
             pl.col("usd").cast(pl.Float64))
         frames.append(frame.drop_nulls("ts"))
+    if not frames:
+        sys.exit(f"{len(caches)} day cache(s) under {dir_} carry no legs; "
+                 "run orderBurstOnchain.py again once more days are pulled")
     fills = pl.concat(frames, how="vertical")
     return (fills.unique(subset=["marketId", "orderHash", "account", "ts"], keep="first"),
             len(caches), len(frames))
@@ -196,7 +201,7 @@ def main(dir_: str | Path | None = None) -> None:
         "freshBurst": len(bKeys), "freshOrder": len(oKeys),
         "shared": len(bKeys & oKeys), "orderOnly": len(oKeys - bKeys),
         "burstOnly": len(bKeys - oKeys), "spannedOrders": over, "spannedTotal": tot,
-        "sampledDays": daysWithLegs, "generatedAt": datetime.now(timezone.utc).isoformat()}}
+        "sampledDays": daysWithLegs, "generatedAt": datetime.now(UTC).isoformat()}}
     (dir_ / "orderBurstOnchainReport.json").write_text(json.dumps(out, indent=2))
     print(f"\nreport -> {dir_ / 'orderBurstOnchainReport.json'} "
           f"; done {time.time() - t0:.0f}s")

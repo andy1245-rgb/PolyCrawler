@@ -30,7 +30,7 @@ def test_plan_days_is_the_pullers_own_plan(monkeypatch, tmp_path):
         (mon.PULLER.SAMPLE_START.year, mon.PULLER.SAMPLE_START.month), 2)
     assert full == expected
     today = datetime.now(timezone.utc).date()
-    assert mon.planDays(2) == [d for d in full if d < today]
+    assert mon.planDays(2) == [d for d in full if d <= today]
     assert full == sorted(full)
     # Pinned sampling contract, recorded at commit time from
     # PULLER.sampleDays((2023, 10), 2, seed=7). If a sampling-contract change
@@ -45,15 +45,30 @@ def test_sample_plan_file_wins_over_recomputation(monkeypatch, tmp_path):
     plan.write_text('["2024-01-05", "2024-01-19"]')
     monkeypatch.setattr(mon, "PLAN_PATH", plan)
     assert mon.samplePlanDays() == [date(2024, 1, 5), date(2024, 1, 19)]
-    assert mon.planDays() == mon.samplePlanDays()
+    assert mon.planDays(today=date(2024, 1, 19)) == mon.samplePlanDays()
 
 
-def test_future_and_today_days_never_enter_the_wait_list(monkeypatch, tmp_path):
+def test_today_is_waited_on_tomorrow_is_not(monkeypatch, tmp_path):
+    # regression (F1, caught re-reviewing the C1-C6 fixes): the filter used
+    # `d < today`, so on a sampled day — 2026-10-15 IS in the live plan — the
+    # monitor fired today's analysis right before today's cache landed, and
+    # the full-plan sentinel then permanently blocked re-firing. The plan is
+    # waited on up to AND INCLUDING today: only days after today are dropped.
+    _isolatePlan(monkeypatch, tmp_path)
+    plan = [date(2026, 10, 14), date(2026, 10, 15), date(2026, 10, 16)]
+    monkeypatch.setattr(mon, "samplePlanDays", lambda perMonth=2: plan)
+    assert mon.planDays(today=date(2026, 10, 15)) == plan[:2]
+    assert mon.planDays(today=date(2026, 10, 14)) == plan[:1]   # boundary day
+    assert mon.planDays(today=date(2026, 10, 13)) == []          # all future
+    assert mon.planDays(today=date(2026, 10, 16)) == plan        # whole plan
+
+
+def test_future_days_never_enter_the_wait_list(monkeypatch, tmp_path):
     # regression: future days made "complete" unreachable mid-month (monitor
-    # timeouts forever); today and later must be dropped.
+    # timeouts forever); after today — but not today itself — must be dropped.
     _isolatePlan(monkeypatch, tmp_path)
     today = datetime.now(timezone.utc).date()
-    assert all(d < today for d in mon.planDays())
+    assert all(d <= today for d in mon.planDays())
 
 
 def test_missing_and_progress_count_cached_day_files(tmp_path):
