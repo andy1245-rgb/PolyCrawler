@@ -32,6 +32,9 @@ from pathlib import Path
 import httpx
 import polars as pl
 
+from polycrawler.backtest import dirsFromConfig
+from polycrawler.config import Config, FetchConfig
+
 t0 = time.time()
 ROOT = Path(__file__).resolve().parents[2]
 DUNE_DIR = ROOT / "data" / "raw" / "dune"
@@ -40,6 +43,10 @@ COND_BATCH = 300           # condition ids per SQL execution
 POLL_SECS = 5
 POLL_TIMEOUT = 600
 
+# Research cells span the accrued universe, so both dirs by default; the
+# resolution goes through the config system (fetch.dataDirs / --data-dir),
+# same precedence as the engine side.
+RESEARCH_FETCH = Config(fetch=FetchConfig(dataDirs=["data", "data/universe"]))
 MILITARY = ("iran", "israel", "hezbollah", "houthi", "lebanon", "hamas", "gaza",
             "ukraine", "russia", "taiwan", "pakistan-military", "maduro", "venezuela",
             "nato", "strike")
@@ -52,9 +59,16 @@ def isMilitarySlug(slug: str) -> bool:
     return any(k in (slug or "").lower() for k in MILITARY)
 
 
-def militaryMarkets() -> pl.DataFrame:
+def researchDataDirs(root: Path | None = None, requested=None) -> list[Path]:
+    """CLI --data-dir wins over fetch.dataDirs, else fetch.dataDir, resolving
+    against the repo root."""
+    return dirsFromConfig(root or ROOT, requested, RESEARCH_FETCH)
+
+
+def militaryMarkets(dirs=None) -> pl.DataFrame:
+    dirs = dirs or researchDataDirs()
     markets = (pl.concat([pl.read_parquet(f"{d}/markets.parquet")
-                          for d in ["data", "data/universe"]], how="diagonal_relaxed")
+                          for d in dirs], how="diagonal_relaxed")
                .unique("marketId", keep="last")
                .select("marketId", "eventSlug", "winner",
                        pl.coalesce("resolvedAt", "endDate").alias("resolvedAt")))
@@ -207,6 +221,11 @@ def report(name: str, df: pl.DataFrame, rng: random.Random) -> dict:
 
 
 def main() -> None:
+    import argparse
+    args = argparse.ArgumentParser()
+    args.add_argument("--data-dir", action="append", default=None)
+    args = args.parse_args()
+    dirs = researchDataDirs(requested=args.data_dir)
     key = ""
     import os
     if os.environ.get("DUNE_API_KEY"):
@@ -216,7 +235,7 @@ def main() -> None:
         sys.exit("DUNE_API_KEY not set and no cached batches under data/raw/dune/; "
                  "export DUNE_API_KEY and rerun")
 
-    markets = militaryMarkets()
+    markets = militaryMarkets(dirs)
     conditionIds = sorted(markets["marketId"].to_list())
     print(f"military markets: {len(conditionIds)} across {markets['eventSlug'].n_unique()} events")
 
@@ -236,7 +255,7 @@ def main() -> None:
     # map asset_id (0x hex) -> outcome label via Gamma clobTokenIds on markets.parquet
     tokmap: dict[str, str] = {}
     allMarkets = (pl.concat([pl.read_parquet(f"{d}/markets.parquet")
-                             for d in ["data", "data/universe"]], how="diagonal_relaxed")
+                             for d in dirs], how="diagonal_relaxed")
                   .unique("marketId", keep="last"))
     for m in allMarkets.iter_rows(named=True):
         try:

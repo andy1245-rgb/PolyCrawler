@@ -56,9 +56,9 @@ from polycrawler.backtest import dirsFromConfig, loadInputs, runBacktest  # noqa
 from polycrawler.strategy import normalizeClusterMap  # noqa: E402
 
 
-def marketsFrame() -> pl.DataFrame:
+def marketsFrame(dirs: list[Path]) -> pl.DataFrame:
     markets = (pl.concat([pl.read_parquet(f"{d}/markets.parquet")
-                          for d in [ROOT / "data", ROOT / "data" / "universe"]],
+                          for d in dirs],
                          how="diagonal_relaxed")
                .unique("marketId", keep="last")
                .select("marketId", "eventSlug", "winner",
@@ -69,9 +69,9 @@ def marketsFrame() -> pl.DataFrame:
             return_dtype=pl.Boolean))
 
 
-def burstTape(cols: list[str]) -> tuple[pl.LazyFrame, pl.LazyFrame]:
+def burstTape(dirs: list[Path], cols: list[str]) -> tuple[pl.LazyFrame, pl.LazyFrame]:
     lazy = pl.concat([pl.scan_parquet(f"{d}/fills.parquet").select(cols)
-                      for d in [ROOT / "data", ROOT / "data" / "universe"]])
+                      for d in dirs])
     raw = (lazy.filter(pl.col("side") == "BUY")
            .sort("account", "marketId", "outcome", "ts")
            .with_columns(
@@ -164,8 +164,7 @@ def residualBuckets(finalPicks: list[tuple], executedKeys: set, prefixKeys: set,
     return out
 
 
-def engineSide(params, loaded) -> tuple[dict, Path, dict]:
-    dirs = dirsFromConfig(ROOT, None, loaded)
+def engineSide(params, dirs: list[Path], loaded) -> tuple[dict, Path, dict]:
     fills, markets, accounts, clusterMap = loadInputs(dirs)
     endTs = fills.select(pl.col("ts").max()).collect().item()
     startTs = datetime(loaded.splitDate.year, loaded.splitDate.month,
@@ -178,21 +177,29 @@ def engineSide(params, loaded) -> tuple[dict, Path, dict]:
 
 
 def main() -> None:
-    args = sys.argv[1:]
-    configPath = Path(args[args.index("--config") + 1]) if "--config" in args \
-        else ROOT / "configs" / "militaryBacktest.yaml"
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="configs/militaryBacktest.yaml")
+    parser.add_argument("--data-dir", action="append", default=None,
+                        help="override the config's data dirs (repeatable)")
+    args = parser.parse_args()
+    configPath = Path(args.config)
     if not configPath.is_absolute():
         configPath = ROOT / configPath
     params, loaded = backtestCli.paramsFrom(configPath, [])
+    # dir resolution is routed through the config system: CLI --data-dir >
+    # fetch.dataDirs > fetch.dataDir. The pinned config spans both dirs, so
+    # the default matches the old hardcoded [data, data/universe] scope.
+    dirs = dirsFromConfig(ROOT, args.data_dir, loaded)
 
-    markets = marketsFrame()
-    raw, fs = burstTape(["ts", "account", "marketId", "outcome", "side", "size", "price"])
+    markets = marketsFrame(dirs)
+    raw, fs = burstTape(dirs, ["ts", "account", "marketId", "outcome", "side", "size", "price"])
     keyed, researchMetrics = researchPicks(raw, fs, markets, params)
     print(f"research cell: {researchMetrics} ({time.time() - t0:.0f}s)")
     prefixKeys = prefixPool(raw, fs, markets, params)
     print(f"prefix pool: {len(prefixKeys)} keys ({time.time() - t0:.0f}s)")
 
-    summary, runDir, clusterMap = engineSide(params, loaded)
+    summary, runDir, clusterMap = engineSide(params, dirs, loaded)
     print(f"engine: trades {summary['tradeCount']} winRate {summary['winRate']:.3f} "
           f"returnOnDeployed {summary['returnOnDeployed']:.3f} ({time.time() - t0:.0f}s)")
     trades = pl.read_parquet(runDir / "trades.parquet")

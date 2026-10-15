@@ -30,11 +30,16 @@ from typing import Any
 
 import polars as pl
 import yaml
+from polycrawler.backtest import dirsFromConfig
+from polycrawler.config import Config, FetchConfig
 
 t0 = time.time()
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_DIR = ROOT / "data" / "entrySweep"
-TOP_DIR = ROOT / "data"
+
+# Research cells span the accrued universe (data/ + data/universe); dir
+# resolution goes through the config system like the engine side.
+RESEARCH_FETCH = Config(fetch=FetchConfig(dataDirs=["data", "data/universe"]))
 
 FILL_WINDOW_SEC = 300
 HALF_SPLIT = datetime(2025, 6, 1, tzinfo=timezone.utc)
@@ -204,7 +209,7 @@ def main() -> None:
     parser.add_argument("--grid", default="configs/sweeps/militaryEntryGrid.yaml")
     parser.add_argument("--limit", type=int, default=30)
     args = parser.parse_args()
-    dirs = args.data_dir or [str(TOP_DIR), str(TOP_DIR / "universe")]
+    dirs = [str(p) for p in dirsFromConfig(ROOT, args.data_dir, RESEARCH_FETCH)]
     spec = yaml.safe_load(Path(args.grid).read_text()) or {}
     grid = spec.get("grid") or {}
     entries = loadEntries(dirs, args.refresh)

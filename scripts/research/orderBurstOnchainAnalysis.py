@@ -60,12 +60,12 @@ def loadLegs(dir_: Path) -> pl.DataFrame:
     return fills.unique(subset=["marketId", "orderHash", "account", "ts"], keep="first")
 
 
-def universeFills(militaryIds: set[str]) -> pl.DataFrame:
+def universeFills(militaryIds: set[str], dirs: list[Path]) -> pl.DataFrame:
     """All BUY fills of the tracked universe (full tape — firstTs here must
     match the research convention: wallet age counts markets of ANY category,
     not just military), military markets optionally marked for entries."""
     parts = []
-    for d in [ROOT / "data", ROOT / "data" / "universe"]:
+    for d in dirs:
         if (d / "fills.parquet").exists():
             parts.append(pl.scan_parquet(d / "fills.parquet").filter(
                 pl.col("side") == "BUY").with_columns(
@@ -112,21 +112,28 @@ def addRetReal(entries: pl.DataFrame, tape: pl.DataFrame) -> pl.DataFrame:
 
 
 def main() -> None:
-    args = sys.argv[1:]
-    dir_ = Path(args[args.index("--dir") + 1]) if "--dir" in args else ROOT / "data" / "raw" / "dune"
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dir", default=str(ROOT / "data" / "raw" / "dune"))
+    parser.add_argument("--data-dir", action="append", default=None)
+    args = parser.parse_args()
+    dir_ = Path(args.dir)
+    # fills/markets dirs routed through the config system (same precedence as
+    # the engine); defaults keep the data/ + data/universe research scope.
+    fillDirs = dob.researchDataDirs(ROOT, args.data_dir)
     sampledDays = len(list(dir_.glob("onchainBuy_*.csv")))
     daysWithLegs = sum(1 for p in dir_.glob("onchainBuy_*.csv")
                        if pl.read_csv(p, infer_schema_length=0).height > 1)
     print(f"sampled days: {daysWithLegs} with legs of {sampledDays} pulled "
           f"({time.time() - t0:.0f}s)\n")
 
-    markets = dob.militaryMarkets()
+    markets = dob.militaryMarkets(fillDirs)
     militarySet = set(markets["marketId"].to_list())
     print(f"military markets: {len(militarySet)} across {markets['eventSlug'].n_unique()} events",
           flush=True)
 
     fills = loadLegs(dir_).filter(pl.col("marketId").is_in(militarySet))
-    universe = universeFills(militarySet)
+    universe = universeFills(militarySet, fillDirs)
     firstSeen = universe.group_by("account").agg(firstTs=pl.col("ts").min())
     tape = buildTape(universe)
     print(f"legs {fills.height} military fills on sampled days, "
