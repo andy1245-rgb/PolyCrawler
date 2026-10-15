@@ -331,3 +331,59 @@ tape** (daily report restarts it):
   exercised end-to-end with a temp state (1,235 markets refresh, full
   backfill, evaluate→alert with /activity age rescue) without touching the
   live process or data/live files.
+
+## 9. Parity made durable + on-chain burst-vs-order + floor ranking (2026-10-15)
+
+### engineParity: the 342-vs-429 drift is a data-scope bug, not engine drift
+- `scripts/research/engineParity.py` (new) recomputes BOTH sides on the
+  current tape every run; no pinned numbers. Written to
+  `data/parity/engineResearchParity.json`.
+- Root cause of the earlier mismatch (my ad-hoc rerun saw engine 342
+  trades/+143% vs research 427/+105%): `configs/militaryBacktest.yaml` had no
+  `fetch` section, so runs used `fetch.dataDir: data` alone (174 markets),
+  while the research cell (militaryCategory.py, duneOrderBurst.py, the entry
+  sweep) spans `data/` + `data/universe/` (1031 markets; all 2026-era
+  markets live only in the universe dir).
+- Fix: `FetchConfig.dataDirs` (list, optional) + `dirsFromConfig()` applying
+  CLI --data-dir > fetch.dataDirs > fetch.dataDir. Wired into cli.py backtest
+  + sweep, scripts/backtest.py, scripts/sweep.py. militaryBacktest.yaml now
+  pins `fetch.dataDirs: [data, data/universe]`.
+- With both dirs the rule-mode engine again reproduces the research cell on
+  the current tape: engine 429 trades / 36.4% / +119.8% vs research cell
+  427 entries / 34.7% / (hold-to-resolution) +105.1%.
+- Residual buckets (engineParity, current tape): overlap 402/427 (94.1%),
+  enginePrefixDrift 5 (engine entered on a legal prefix, later fills pushed
+  the burst avg above the gate), notExecutedLegalPrefix 24 (delayed entry
+  sweet spot: legal running prefix exists but the delayed fill never landed),
+  noLegalPrefix 1, clusterAlreadyCopied 0. The "notExecutedLegalPrefix" 24
+  are execution-side losses the whole-burst research cell under-counts —
+  when tuning the live rule, remember the cell's own returns benefit from
+  entries a delayed copy couldn't have made.
+
+### burst-vs-order on Polygon (Dune replacement), partial read
+- `scripts/research/orderBurstOnchainAnalysis.py` (new): reuses
+  duneOrderBurst.py's burstEntries/orderEntries/annotate/report on the
+  on-chain sampled legs; wallet-age firstTs + realistic-fill tape taken from
+  the FULL fills universe (militaryCategory convention — one fix over the
+  dune script's military-scoped firstSeen). Report JSON at
+  `data/raw/dune/orderBurstOnchainReport.json`, log
+  `logs/orderBurstAnalysis.log`.
+- Partial day (~29-33 of 74 sampled days cached, ends 2025-02): >=1k
+  reference cell order-level dominates on robustness (boot p5 +0.189 vs
+  -0.043, P(>0) 98% vs 92%); orders >=$5k spanning >1 burst window only 1/26
+  so far. The ≥$5k cell is still thin (n=4-5) — do NOT call it until the
+  full pull exits; a monitor fires the analysis automatically
+  (`logs/orderBurstAnalysis.log`).
+- duneOrderBurst.report: None-safe H1/H2 (sample spans can be half-empty).
+
+### entrySweep: floor-metric ranking is now the default
+- `runSweep()` ranks cells by bootstrapped per-event p5 floor (ret only as
+  tiebreak), ineligible cells sink. Test proves ordering flips against the
+  old ret-descending sort. Recheck log already showed the consequence:
+  $10k/≤0.35 cells hold p5 +0.39..+0.57 vs +0.13 for the $5k line with
+  ~150-240 trades — candidate for the live watch rule pending more OOS.
+
+### git note
+- dataDirs plumbing + parity tool + analysis scripts uncommitted at session
+  end (commit when asked).
+

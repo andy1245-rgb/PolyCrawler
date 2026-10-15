@@ -1,7 +1,13 @@
 # Validated military fresh-big-bet rule (research/militaryCategory.md,
 # sweeps of scripts/research/militarySweep.py). Validation window: the full
 # accrued universe, so splitDate is its start date, not the OOS split.
+# The research cell spans both accrued dirs; missing data/universe silently
+# halves the cell (2026-era markets live only there).
 splitDate: 2023-10-01
+fetch:
+  dataDirs:
+    - data
+    - data/universe
 strategy:
   minNetUsd: 5000
   maxEntryPrice: 0.35

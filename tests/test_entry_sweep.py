@@ -71,10 +71,30 @@ def test_gridCellsExpandsCartesian() -> None:
     assert cells[1] == {"minUsd": 1000, "maxPrice": 0.35, "ageDays": 1, "marketsSoFar": 2}
 
 
-def test_runSweepRanksDescending() -> None:
-    rows = [entry(T0 + timedelta(hours=i), 0.3) for i in range(30)]
-    frame = pl.DataFrame(rows)
-    ranked = esw.runSweep(frame, {"minUsd": [5000], "maxPrice": [0.35],
+def test_runSweepRanksByFloorP5NotMean() -> None:
+    # Cell A (minUsd 10000, maxPrice 0.5): two events, retReal +3.0 vs -1.0
+    # -> high mean (1.0), p5 floor -1. Cell B (minUsd 7000, maxPrice 0.3):
+    # two +0.1 events -> low mean (0.1), floor ~0.1. The gates are thresholds
+    # so cells nest along a single axis; splitting minUsd up vs maxPrice down
+    # isolates the two sets. Floor ranking must put B first even though the
+    # old ret-descending sort would have picked A.
+    def cell(usd: float, price: float, events: list[tuple[str, float]],
+             startH: int) -> list[dict]:
+        rows = []
+        for ev, retReal in events:
+            for i in range(24):
+                rows.append(dict(entry(T0 + timedelta(hours=startH + i), price,
+                                       usd=usd, event=ev), retReal=retReal))
+            startH += 40
+        return rows
+    frame = pl.DataFrame(
+        cell(12000.0, 0.45, [("a", 3.0), ("b", -1.0)], 0)
+        + cell(8000.0, 0.25, [("c", 0.1), ("d", 0.1)], 2000))
+    ranked = esw.runSweep(frame, {"minUsd": [10000, 7000], "maxPrice": [0.5, 0.3],
                                   "ageDays": [5], "marketsSoFar": [3]})
-    assert ranked.height == 1
-    assert ranked["ret"][0] is not None
+    rows = {(r["minUsd"], r["maxPrice"]): r for r in ranked.iter_rows(named=True)}
+    bCell, aCell, empty = rows[(7000, 0.3)], rows[(10000, 0.5)], rows[(10000, 0.3)]
+    assert ranked["minUsd"][0] == 7000 and ranked["maxPrice"][0] == 0.3  # floor cell wins
+    assert bCell["p5"] > 0
+    assert aCell["ret"] > bCell["ret"]  # the mean would have ranked A first
+    assert empty["ret"] is None and empty["p5"] is None  # dead cells sink

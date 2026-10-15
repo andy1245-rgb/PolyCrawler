@@ -194,7 +194,7 @@ def runSweep(entries: pl.DataFrame, grid: dict[str, list[Any]]) -> pl.DataFrame:
         row = dict(cell)
         row.update(evaluate(filterCell(entries, cell), rng))
         rows.append(row)
-    return pl.DataFrame(rows).sort("ret", descending=True, nulls_last=True)
+    return pl.DataFrame(rows).sort(["p5", "ret"], descending=True, nulls_last=True)
 
 
 def main() -> None:

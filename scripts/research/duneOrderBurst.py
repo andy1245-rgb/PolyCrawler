@@ -200,7 +200,8 @@ def report(name: str, df: pl.DataFrame, rng: random.Random) -> dict:
            "retReal": round(retReal, 3) if retReal is not None else None,
            "boot p5": round(boots[100], 3), "boot p95": round(boots[1899], 3),
            "P(>0)": f"{sum(1 for b in boots if b > 0) / len(boots):.0%}",
-           "H1": round(h1, 3), "H2": round(h2, 3)}
+           "H1": round(h1, 3) if h1 is not None else None,
+           "H2": round(h2, 3) if h2 is not None else None}
     print(row, flush=True)
     return row
 

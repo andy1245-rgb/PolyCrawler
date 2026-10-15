@@ -881,6 +881,13 @@ def resolveDataDirs(root: Path, requested: Sequence[str] | None, fallback: str) 
     return dirs
 
 
+def dirsFromConfig(root: Path, requested: Sequence[str] | None, config) -> list[Path]:
+    """Data dirs a run spans: CLI --data-dir wins, else the config's
+    fetch.dataDirs list, else fetch.dataDir."""
+    return resolveDataDirs(
+        root, requested or getattr(config.fetch, "dataDirs", None), config.fetch.dataDir)
+
+
 def loadInputs(
     dataDirs: Sequence[str | Path],
 ) -> tuple[pl.LazyFrame, pl.DataFrame, list[str], dict[str, str] | None]:

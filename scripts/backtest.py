@@ -10,9 +10,9 @@ import polars as pl
 
 from polycrawler.backtest import (
     BacktestParams,
+    dirsFromConfig,
     formatSummary,
     loadInputs,
-    resolveDataDirs,
     runBacktest,
 )
 from polycrawler.config import applyOverride, loadConfig
@@ -38,7 +38,7 @@ def main() -> None:
     if not configPath.is_absolute():
         configPath = root / configPath
     params, loaded = paramsFrom(configPath, args.set)
-    dirs = resolveDataDirs(root, args.data_dir, loaded.fetch.dataDir)
+    dirs = dirsFromConfig(root, args.data_dir, loaded)
     fills, markets, accounts, clusterMap = loadInputs(dirs)
     endTs = fills.select(pl.col("ts").max()).collect().item()
     startTs = datetime(

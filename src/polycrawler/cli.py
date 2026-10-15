@@ -9,10 +9,10 @@ import typer
 
 from polycrawler.backtest import (
     BacktestParams,
+    dirsFromConfig,
     formatSummary,
     loadInputs,
     prepareBacktest,
-    resolveDataDirs,
     runBacktest,
 )
 from polycrawler.config import loadConfig
@@ -186,7 +186,7 @@ def backtest(
         configPath = root / configPath
     loaded = loadConfig(str(configPath), setOverrides or [])
     params = BacktestParams.model_validate(loaded.strategy.model_dump())
-    dirs = resolveDataDirs(root, dataDir or None, loaded.fetch.dataDir)
+    dirs = dirsFromConfig(root, dataDir or None, loaded)
     fills, markets, accounts, clusterMap = loadInputs(dirs)
     endTs = fills.select(pl.col("ts").max()).collect().item()
     startTs = datetime(
@@ -225,7 +225,7 @@ def sweep(
     loaded = loadConfig(str(configPath))
     spec = loadSweep(sweepPath)
     params = BacktestParams.model_validate(loaded.strategy.model_dump())
-    dirs = resolveDataDirs(root, dataDir or None, loaded.fetch.dataDir)
+    dirs = dirsFromConfig(root, dataDir or None, loaded)
     fills, markets, accounts, clusterMap = loadInputs(dirs)
     endTs = fills.select(pl.col("ts").max()).collect().item()
     startTs = datetime(
