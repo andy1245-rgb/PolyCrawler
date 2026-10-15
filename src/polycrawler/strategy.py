@@ -191,6 +191,62 @@ def recordCopy(row: dict, memory: BookMemory) -> None:
     memory.copiedMarkets.setdefault((group, key), set()).add(row["marketId"])
 
 
+def selectRuleAccounts(
+    fills: pl.DataFrame | pl.LazyFrame,
+    markets: pl.DataFrame,
+    params,
+) -> list[str]:
+    """Accounts with at least one 10-minute BUY burst on a matching market
+    that crossed minNetUsd at a running-average price <= maxEntryPrice.
+    `rule` account-selection mode ignores the discovery flag list: the
+    military fresh-big-bet logic flags the account itself from the fill
+    tape. Freshness (age/marketsSoFar) is gated again at replay."""
+    lazy = fills if isinstance(fills, pl.LazyFrame) else fills.lazy()
+    keywords = getattr(params, "eventSlugFilter", None) or []
+    wantedMarkets: set[str] = set()
+    if keywords:
+        slugs = markets["eventSlug"].to_list()
+        hit = {s for s in slugs if any(k in (s or "").lower() for k in keywords)}
+        wantedMarkets = set(
+            markets.filter(pl.col("eventSlug").is_in(list(hit)))["marketId"].to_list()
+        )
+    burst = timedelta(minutes=10)
+    minUsd = float(getattr(params, "minNetUsd", 0) or 0)
+    maxPrice = float(getattr(params, "maxEntryPrice", 1.0) or 1.0)
+    buys = (
+        lazy.filter(
+            (pl.col("side") == "BUY")
+            & (pl.col("size") > 0)
+            & pl.col("price").is_not_null()
+            & (pl.col("marketId").is_in(list(wantedMarkets)) if wantedMarkets else pl.lit(True))
+        )
+        .sort("account", "marketId", "outcome", "ts")
+        .with_columns(
+            burstIdx=(
+                pl.col("ts").diff().over("account", "marketId", "outcome")
+                .fill_null(pl.duration(days=1))
+                > burst
+            )
+            .cum_sum()
+            .over("account", "marketId", "outcome")
+        )
+        .with_columns(
+            usdRun=(pl.col("size") * pl.col("price")).cum_sum().over(
+                "account", "marketId", "outcome", "burstIdx"),
+            sharesRun=pl.col("size").cum_sum().over(
+                "account", "marketId", "outcome", "burstIdx"),
+        )
+        .filter(
+            (pl.col("usdRun") >= minUsd)
+            & ((pl.col("usdRun") / pl.col("sharesRun")) <= maxPrice)
+        )
+        .select(pl.col("account").str.to_lowercase().alias("account"))
+        .unique()
+        .collect()
+    )
+    return buys.get_column("account").to_list()
+
+
 def orderShares(
     theirSize: float,
     ourPrice: float | None,

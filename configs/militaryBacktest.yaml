@@ -15,6 +15,7 @@ strategy:
   slippageBps: 50
   maxAccountAgeDays: 5.0
   maxMarketsSoFar: 3
+  accountSelection: rule
   eventSlugFilter:
     - iran
     - israel

@@ -5,6 +5,7 @@ from __future__ import annotations
 import calendar
 import hashlib
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -16,7 +17,15 @@ from pydantic import BaseModel, ConfigDict
 
 from polycrawler.fetch import fillDedupeKeys
 from polycrawler.priceMove import buildPriceTape, priceAt
-from polycrawler.strategy import BookMemory, netPath, observeBuy, orderShares, planBuy, recordCopy
+from polycrawler.strategy import (
+    BookMemory,
+    netPath,
+    observeBuy,
+    orderShares,
+    planBuy,
+    recordCopy,
+    selectRuleAccounts,
+)
 
 tsType = pl.Datetime(time_unit="us", time_zone="UTC")
 markHorizon = timedelta(days=3650)
@@ -41,6 +50,7 @@ class BacktestParams(BaseModel):
     maxAccountAgeDays: float | None = None
     maxMarketsSoFar: int | None = None
     eventSlugFilter: list[str] | None = None
+    accountSelection: Literal["discovery", "rule"] = "discovery"
 
 
 tradeSchema = {
@@ -666,6 +676,8 @@ def runBacktest(
     clusterMap: dict[str, str] | None = None,
     runsDir: str | Path | None = None,
 ) -> BacktestResult:
+    if getattr(params, "accountSelection", "discovery") == "rule":
+        accountsToCopy = selectRuleAccounts(fills, markets, params)
     prepared = prepareBacktest(fills, markets, accountsToCopy, startTs, endTs, clusterMap)
     result = runPrepared(prepared, params)
     if runsDir is not None:
@@ -878,6 +890,8 @@ def loadInputs(
     accounts = readCopyAccounts(suspicious)
     clusterFile = _firstExisting(dataDirs, "clusterAccounts.parquet")
     clusterMap = readClusterMap(clusterFile) if clusterFile else None
+    if os.environ.get("PC2_NO_CLUSTER_MAP"):
+        clusterMap = None
     return fills, markets, accounts, clusterMap
 
 

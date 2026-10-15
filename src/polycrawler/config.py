@@ -70,6 +70,7 @@ class StrategyConfig(BaseModel):
     maxAccountAgeDays: float | None = None
     maxMarketsSoFar: int | None = None
     eventSlugFilter: list[str] | None = None
+    accountSelection: Literal["discovery", "rule"] = "discovery"
 
 
 class Config(BaseModel):

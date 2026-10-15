@@ -284,3 +284,38 @@ def test_accountFreshnessGatesEntries() -> None:
         account="0xa", accountAgeDays=9.0, marketsSoFar=1,
     )
     assert blocked == "skip"
+
+
+def test_selectRuleAccountsNeedsBurstThresholdNotSingleFill() -> None:
+    from polycrawler.strategy import selectRuleAccounts
+
+    v = BacktestParams.model_validate(
+        params(minNetUsd=5000, maxEntryPrice=0.35, eventSlugFilter=["strike"],
+               accountSelection="rule")
+    )
+    frames = pl.DataFrame(
+        [
+            # chunks: $3k at 0.2, $3k at 0.3 within 1 min in a matching market:
+            # single fills both below $5k but the burst crosses it
+            {"ts": ts(0), "account": "0xA", "marketId": "m", "outcome": "Yes",
+             "side": "BUY", "size": 15000.0, "price": 0.2},
+            {"ts": ts(60), "account": "0xA", "marketId": "m", "outcome": "Yes",
+             "side": "BUY", "size": 10000.0, "price": 0.3},
+            # burst over threshold but running price 0.6 > 0.35 -> excluded
+            {"ts": ts(0), "account": "0xB", "marketId": "m", "outcome": "Yes",
+             "side": "BUY", "size": 8000.0, "price": 0.6},
+            # right amounts but non-matching event market -> excluded
+            {"ts": ts(0), "account": "0xC", "marketId": "other", "outcome": "Yes",
+             "side": "BUY", "size": 20000.0, "price": 0.2},
+        ]
+    )
+    markets = pl.DataFrame(
+        [
+            {"marketId": "m", "outcomes": ["Yes", "No"], "eventSlug": "iran-strike-october",
+             "winner": None, "resolvedAt": None},
+            {"marketId": "other", "outcomes": ["Yes", "No"], "eventSlug": "fed-rate-decision",
+             "winner": None, "resolvedAt": None},
+        ]
+    )
+    selected = selectRuleAccounts(frames, markets, v)
+    assert selected == ["0xa"]

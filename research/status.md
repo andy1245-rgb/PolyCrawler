@@ -166,6 +166,71 @@ events, validated with event-level resampling.
    (total PnL vs PnL / max drawdown, spec §12.4).
 6. Commit the uncommitted work once tests pass.
 
+## 7. Session 2026-10-14/15 update
+
+Progress against the list above:
+
+1. **Committed** (`5ca33c1`): the whole 2026-10-09 week — discovery package,
+   lead gate, RTDS watcher, V2 execution port, 10 new tests. `775f176`
+   followed same day: paper-gate fix, on-chain order-burst rebuild, engine
+   rule knobs, CLI wiring.
+2. **Paper gate fixed.** Nothing was broken: all 8 signals sit on long-dated
+   markets (Oct 28/31 + Jan 2027) so realized P&L is empty by design. New
+   `scripts/paperMarkToMarket.py` (wired into `dailyCatchup.sh`) writes
+   `data/live/openPositions.csv` each run — full signal context (burstUsd,
+   avgPrice, ageDays, askSize) plus mark price and unrealized P&L — so the
+   gate gets daily signal long before resolution. First book: 8 positions,
+   $800 committed, −$33.76 unrealized.
+3. **Dune order_burst rebuild → on-chain.** DUNE is Cloudflare-blocked for
+   browser + needs a key we don't have; `api.relay`-style workarounds
+   considered and the Dune SQL route replaced by a direct Polygon log pull:
+   `scripts/research/orderBurstOnchain.py`. Verified against the contracts:
+   ctfExchangeV1 (2022-09), negRiskExchangeV1 (2023-11-28), ctfExchangeV2
+   (2026-03-31, explicit `Side` word), negRiskExchangeV2 (2026-04-03),
+   exchangeV3 (2026-05-26). V1 era pulled via Etherscan V2 (10k page ceiling
+   → range bisection; rate cap 3/s → retry), V2 era via Alchemy 10-block
+   getLogs windows. BUY legs joined to fills.parquet ground truth by
+   (txHash, wallet, shares, usd). Sample plan: 2 seeded days/month.
+   Progress: 2023-10 → mid-2025 cached in data/raw/dune/onchainBuy_*.csv;
+   full V2-era spread comes in background. Analysis runs after pull.
+4. **Relay origin tracing end-to-end on the universe**: full
+   `pc2 discover --config configs/eventUniverse.yaml` run in progress
+   (logs/discoverUniverseRelay.log) — Relay hash probes (144) resolved, user
+   paging crawling under the API's rate limits. Written before route
+   retirement 24 Nov 2026.
+5. **Engines wired + military rule folded in.** `pc2 backtest` / `pc2 sweep`
+   now drive the real engines; `BacktestParams`/`StrategyConfig` gained
+   `maxAccountAgeDays`, `maxMarketsSoFar`, `eventSlugFilter`,
+   `accountSelection: rule` (rule mode derives accounts from the fill tape
+   itself — the research rule flags the account, not a step-1 suspect list).
+   Validation config: `configs/militaryBacktest.yaml`; grid:
+   `configs/sweeps/military.yaml`.
+   **Open anomaly (2026-10-15):** rule-mode engine backtest over the full
+   window comes out −19.4% (136 trades, 20 events) while the research
+   pipeline's fresh ≥$5k cell was +71%. Recheck of the research sweep on
+   today's refreshed universe fills is running
+   (logs/militarySweepRecheck.log). Suspects: engine enters at the
+   delayed/backward-asof tape price + 50bps and mirrors later fills (adds),
+   while the research cell prices with the wallet's own burst average and
+   next-tick fills; also possible drift in the refreshed fills.
+
+## 8. Gotchas learned this session
+
+- Etherscan V2 has a permanent log-index gap for the 2026 CREATE2-deployed
+  V2/V3 exchanges; V1 synthesis works (topic filter, 1000/page, 3 calls/s,
+  10k page-window → bisect ranges).
+- Alchemy free tier caps `eth_getLogs` at 10 blocks per call.
+- `Path(__file__).resolve().parents[1]` in `scripts/research/*` points into
+  `scripts/`, not the repo root (`parents[2]` needed) — bit both
+  `duneOrderBurst.py` (dormant) and the new puller.
+- `markets.parquet` stores `clobTokenIds`/`outcomes` as native lists, Gamma
+  caches store JSON strings — parse both.
+- On-chain `OrderFilled` topics: [sig, orderHash, maker, taker]; maker is
+  topics[2] (the first indexed arg after the sig), easy to misindex.
+- Concurrent jobs (discover re-run) rewrite `data/universe/*.parquet`
+  mid-run: never validate an engine backtest against the live data dir
+  while discover writes; snapshot first.
+
 ## 6. Live paper-trading system (2026-10-09)
 
 Built and running (see `research/militaryCategory.md` for the validated rule):
