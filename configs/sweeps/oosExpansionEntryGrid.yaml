@@ -1,0 +1,16 @@
+# OOS transport eval of the floor-ranked military burst-entry cells: the
+# 200-slug expansion pull (configs/oosExpansionFetch.yaml, splitDate
+# 2026-01-01) landed fresh into data/oosExpansion. Grid axes are IDENTICAL to
+# configs/sweeps/oosEntryGrid.yaml / configs/sweeps/militaryEntryGrid.yaml --
+# only the fetch scope differs. IMPORTANT: dataDirs is [data/oosExpansion]
+# ALONE (no data/, no data/universe, no data/oos) -- a clean fresh holdout;
+# the roster was built with zero slug overlap against every prior dir.
+# Run: uv run python scripts/research/entrySweep.py \
+#     --data-dir data/oosExpansion --grid configs/sweeps/oosExpansionEntryGrid.yaml
+fetch:
+  dataDir: data/oosExpansion
+grid:
+  minUsd: [500, 1000, 2000, 5000, 10000, 20000]
+  maxPrice: [0.2, 0.35, 0.5, 0.65]
+  ageDays: [1, 2, 3, 5, 7]
+  marketsSoFar: [1, 2, 3, 5]
