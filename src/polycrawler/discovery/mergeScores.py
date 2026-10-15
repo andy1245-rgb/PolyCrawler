@@ -258,11 +258,23 @@ def planMerges(
 ) -> list[MergeDecision]:
     """Per-edge decision: merge iff evidence clears the kind's threshold.
 
+    FAIL-CLOSED gate: every edge kind must have an explicit threshold in the
+    dict — a missing key raises ValueError instead of silently defaulting to
+    1 (fail-open would let an unknown/untuned kind merge freely). The shipped
+    defaultThresholds() fills all seven kinds, and an explicit dict overrides
+    a kind's default wholesale (coTrade's threshold replaces minCoTrades).
+
     The rule text is the printable audit gate: strong money-flow kinds merge
     at >= 1 edge, coTrade at >= minCoTrades matched windows."""
     decisions: list[MergeDecision] = []
     for edge in edges:
-        threshold = thresholds.get(edge.kind, 1)
+        try:
+            threshold = thresholds[edge.kind]
+        except KeyError:
+            raise ValueError(
+                f"no threshold for edge kind {edge.kind!r}: fail-closed, "
+                f"pass {list(ALL_KINDS)} (see defaultThresholds)"
+            ) from None
         merge = edge.evidence >= threshold
         operator = ">=" if merge else "<"
         decisions.append(

@@ -307,9 +307,11 @@ def testThresholdPlumbingFlipsButDefaultsDoNothing() -> None:
     assert {row["clusterId"] for row in parents} == {"a", "c"}
     membership = {row["account"] for row in members}
     assert membership == set(args["accounts"])
-    # parents[0] is NOT the anchor component: the returned rows iterate the
-    # accounts set, so their order varies with the interpreter hash seed —
-    # that is why the clusterId membership is asserted as a set above.
+    # parents rows are NOT order-reliable: the partition itself is
+    # seed-stable (union-find roots and the parent/clusterId labels are
+    # deterministic), but the rows emerge in set-iteration order and the
+    # frames-level sort does not pin them — polars sorting on tied keys is
+    # non-stable — so the clusterId membership is asserted as a set above.
     # shipped default thresholds reproduce the unconditional merge exactly
     tight = dict(args)
     tight["mergeThresholds"] = defaultThresholds(minCoTrades=2)

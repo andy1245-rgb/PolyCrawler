@@ -64,13 +64,30 @@ from one origin group:
   audited-but-unmerged edge keeps its label; a below-threshold coTrade
   window (1 room < 2) stays unmerged at defaults.
 
-Result: **3 passed**, stable across `PYTHONHASHSEED` sweep (0…65535. Full
-suite: **111 passed** in `uv run pytest`, green across the same sweep).
+Result: **3 passed**, stable across a 12-seed `PYTHONHASHSEED` sweep (a
+sample, not all 65,536 seeds). Full suite: **118 passed** in `uv run pytest`,
+green across the same sweep.
 
-Notes fixed while finishing: component row order inside
-`buildFundingClusters` follows set iteration, so membership assertions are
-set-based (members of any component clearing `minSuspiciousAccounts` are
-ALL included; components below the gate are documentedly absent).
+Notes fixed while finishing: the partition buildFundingClusters returns is
+seed-stable (union-find roots and every parent/clusterId label are
+deterministic), but the parent ROW order is not — the parent rows come out of
+component iteration in whatever order the accounts set yields, and the
+frames-level sort over [suspiciousCount, totalProfitUsd, parent] does not
+save it: polars sorting on tied keys is non-stable. Membership assertions
+stay set-based; do not compare parent frames positionally.
+
+## Landing the branch
+
+Rehearsed recipe, verbatim:
+
+> land 6a04b07 → ac54d18 → d6f0b96-chain onto polycrawler2 in exact order;
+> do NOT cherry-pick refactor commits without the package split (silent
+> ModuleNotFoundError).
+
+(`6a04b07` is the discovery package split, `ac54d18` the mergeScores
+evidence/decision layer, and the `d6f0b96` chain carries the rest: notes +
+composition audit. Without the split, `from polycrawler.discovery import …`
+resolves against the old layout and fails only at import time.)
 
 ## Composition audit
 

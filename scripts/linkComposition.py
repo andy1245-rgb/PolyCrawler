@@ -7,6 +7,11 @@ write those two files into `config.fetch.dataDir`). New = the engine's
 funding stage re-executed inside a TEMP-COPY of that data dir -- the real
 data dir is never written to. The etherscan/relay caches ride along so a
 no-op replay is fully cache-served (offline when nothing changed).
+HONESTY NOTE on that claim: ALCHEMY_API_KEY is deliberately dropped from the
+environment for the replay, so no live Alchemy calls can happen — the run is
+cache-served or it fails. A no-CACHE replay (cache misses the addresses it
+needs) makes real authenticated Etherscan calls and fails fast with
+RuntimeError("ETHERSCAN_API_KEY is not set") when that key is absent.
 
 Per config the report carries:
   * old -> new clusterId mapping (accounts present in both snapshots)
@@ -35,6 +40,7 @@ Run:
 import argparse
 import itertools
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -265,20 +271,40 @@ def main() -> None:
     parser.add_argument("--tmp-root", default=None)
     args = parser.parse_args()
     t0 = time.time()
-    oldParents, oldMembers = loadSnapshot(args.data_dir or "data")
+    # The tool must never depend on cwd: the default snapshot dir (and a
+    # relative dataDir from the config) is anchored at the repository root.
+    repoRoot = Path(__file__).resolve().parents[1]
+    if args.data_dir:
+        dataDir: Path = Path(args.data_dir)
+    else:
+        dataDir = repoRoot / "data"
+    oldParents, oldMembers = loadSnapshot(dataDir)
     tmp = Path(tempfile.mkdtemp(prefix="linkcomp-", dir=args.tmp_root))
-    cfg = loadConfig(args.config)
-    source = args.data_dir if args.data_dir else cfg.fetch.dataDir
-    stageSnapshot(source, tmp)
-    print(f"temp snapshot {tmp} ({time.time() - t0:.0f}s)", flush=True)
-    frozen = cfg.model_copy(deep=True)
-    frozen.fetch.dataDir = str(tmp)
-    runFunding(frozen, refresh=False)
-    newParents, newMembers = loadSnapshot(tmp)
-    report = compare(oldParents, oldMembers, newParents, newMembers)
-    print(json.dumps(report, indent=2, default=str))
-    print(f"verdict: {report['verdict']}")
-    print(f"({time.time() - t0:.0f}s)")
+    savedAlchemy = os.environ.pop("ALCHEMY_API_KEY", None)
+    try:
+        cfg = loadConfig(args.config)
+        if args.data_dir:
+            source = dataDir
+        else:
+            source = Path(cfg.fetch.dataDir)
+            if not source.is_absolute():
+                source = repoRoot / source
+        stageSnapshot(source, tmp)
+        print(f"temp snapshot {tmp} ({time.time() - t0:.0f}s)", flush=True)
+        frozen = cfg.model_copy(deep=True)
+        frozen.fetch.dataDir = str(tmp)
+        runFunding(frozen, refresh=False)
+        newParents, newMembers = loadSnapshot(tmp)
+        report = compare(oldParents, oldMembers, newParents, newMembers)
+        print(json.dumps(report, indent=2, default=str))
+        print(f"verdict: {report['verdict']}")
+        print(f"({time.time() - t0:.0f}s)")
+    finally:
+        if savedAlchemy is not None:
+            os.environ["ALCHEMY_API_KEY"] = savedAlchemy
+        # The staged snapshot is a full raw/etherscan + raw/relay copy
+        # (hundreds of MB): always clean it up, even on failure.
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 if __name__ == "__main__":
