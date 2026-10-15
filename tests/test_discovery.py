@@ -5,8 +5,8 @@ from pathlib import Path
 import httpx
 import polars as pl
 
-from polycrawler import discovery as discoveryMod
 from polycrawler import fetch as fetchMod
+from polycrawler.discovery import engine as discoveryMod
 from polycrawler.config import DiscoveryConfig
 from polycrawler.discovery import (
     activityStats,
