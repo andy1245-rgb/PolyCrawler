@@ -38,6 +38,9 @@ class BacktestParams(BaseModel):
     exitMode: Literal["followCluster", "holdToResolution"] = "followCluster"
     delaySec: int = 30
     slippageBps: float = 50
+    maxAccountAgeDays: float | None = None
+    maxMarketsSoFar: int | None = None
+    eventSlugFilter: list[str] | None = None
 
 
 tradeSchema = {
@@ -184,7 +187,35 @@ def prepareBacktest(
             }
         )
     tape = buildPriceTape(tapeFills, markets)
-    path = _attachMarkets(netPath(copied, wanted, clusterMap), markets)
+    path = netPath(copied, wanted, clusterMap) if clusterMap else netPath(copied, wanted)
+    if copied.height:
+        history = (
+            lazy.filter(pl.col("account").str.to_lowercase().is_in(wanted))
+            .select(pl.col("account").str.to_lowercase().alias("account"), "ts", "marketId")
+            .collect()
+            .sort("account", "ts")
+            .filter(pl.col("ts") <= endTs)
+        )
+        history = history.with_columns(
+            marketsSoFar=pl.col("marketId").is_first_distinct().cast(pl.Int32)
+            .cum_sum().over("account")
+        )
+        firstSeen = history.group_by("account").agg(firstTs=pl.col("ts").min())
+        markRank = history.unique(subset=["account", "marketId"], keep="first").select(
+            "account", "marketId", "marketsSoFar"
+        )
+        path = (
+            _attachMarkets(path, markets)
+            .join(firstSeen, on="account", how="left")
+            .with_columns(
+                accountAgeDays=(pl.col("ts") - pl.col("firstTs")).dt.total_seconds() / 86400.0
+            )
+            .drop("firstTs")
+            .join(markRank, on=["account", "marketId"], how="left")
+            .sort("rowId")
+        )
+    else:
+        path = _attachMarkets(path, markets)
     return Prepared(path=path, tape=tape, startTs=startTs, endTs=endTs)
 
 
@@ -361,6 +392,9 @@ def _onBuy(book: Book, row: dict, ourPrice: float | None, params, endTs: datetim
         row.get("eventSlug"),
         book.memory,
         params,
+        account=row.get("account"),
+        accountAgeDays=row.get("accountAgeDays"),
+        marketsSoFar=row.get("marketsSoFar"),
     )
     if action == "skip":
         return

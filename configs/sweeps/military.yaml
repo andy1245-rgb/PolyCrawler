@@ -1,0 +1,11 @@
+name: militaryFreshRule
+objective: totalPnl
+minTrades: 10
+minEvents: 3
+grid:
+  maxEntryPrice: [0.2, 0.35, 0.5]
+  minNetUsd: [2000, 5000, 10000, 20000]
+  maxAccountAgeDays: [2.0, 3.0, 5.0]
+  maxMarketsSoFar: [1, 3, 5]
+  delaySec: [30, 300]
+  slippageBps: [0, 50, 200]

@@ -1,0 +1,33 @@
+# Validated military fresh-big-bet rule (research/militaryCategory.md,
+# sweeps of scripts/research/militarySweep.py). Validation window: the full
+# accrued universe, so splitDate is its start date, not the OOS split.
+splitDate: 2023-10-01
+strategy:
+  minNetUsd: 5000
+  maxEntryPrice: 0.35
+  copyRule: all
+  sizing: mirrorPct
+  mirrorPct: 1.0
+  maxPositionUsd: 1000
+  maxTotalExposureUsd: null
+  exitMode: holdToResolution
+  delaySec: 30
+  slippageBps: 50
+  maxAccountAgeDays: 5.0
+  maxMarketsSoFar: 3
+  eventSlugFilter:
+    - iran
+    - israel
+    - hezbollah
+    - houthi
+    - lebanon
+    - hamas
+    - gaza
+    - ukraine
+    - russia
+    - taiwan
+    - pakistan-military
+    - maduro
+    - venezuela
+    - nato
+    - strike

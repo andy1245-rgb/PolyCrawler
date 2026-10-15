@@ -33,7 +33,7 @@ import httpx
 import polars as pl
 
 t0 = time.time()
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DUNE_DIR = ROOT / "data" / "raw" / "dune"
 DUNE_API = "https://api.dune.com/api/v1"
 COND_BATCH = 300           # condition ids per SQL execution

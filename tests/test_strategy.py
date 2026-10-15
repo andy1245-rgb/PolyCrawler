@@ -6,6 +6,7 @@ import pytest
 from polycrawler.backtest import BacktestParams
 from polycrawler.strategy import (
     BookMemory,
+    Burst,
     netPath,
     noteLargest,
     observeBuy,
@@ -237,3 +238,49 @@ def test_orderSharesCapsPositionAndExposure() -> None:
     assert orderShares(10, 0.5, room, 100) == 0
     assert orderShares(10, None, mirror, 0) == 0
     assert orderShares(1000, 0.5, mirror, 0, positionUsd=80) == pytest.approx(40)
+
+
+def test_eventSlugFilterOnlyCopiesMatchingEvents() -> None:
+    knobs = params(eventSlugFilter=["iran", "strike"])
+    assert takeEntry(row(eventSlug="iran-strike-liu-something-12-24"), BookMemory(), knobs) is True
+    assert takeEntry(row(eventSlug="ukraine-russia-clash"), BookMemory(), knobs) is False
+    assert takeEntry(row(eventSlug="austria-election"), BookMemory(), knobs) is False
+    assert takeEntry(row(eventSlug=None), BookMemory(), knobs) is False
+    openSlug = params()
+    assert takeEntry(row(eventSlug="anything"), BookMemory(), openSlug) is True
+
+
+def test_accountFreshnessGatesEntries() -> None:
+    knobs = params(maxAccountAgeDays=5.0, maxMarketsSoFar=3)
+    fresh = row()
+    fresh["accountAgeDays"] = 4.0
+    fresh["marketsSoFar"] = 3
+    assert takeEntry(fresh, BookMemory(), knobs) is True
+    stale = row()
+    stale["accountAgeDays"] = 5.5
+    stale["marketsSoFar"] = 1
+    assert takeEntry(stale, BookMemory(), knobs) is False
+    veteran = row()
+    veteran["accountAgeDays"] = 0.0
+    veteran["marketsSoFar"] = 4
+    assert takeEntry(veteran, BookMemory(), knobs) is False
+    unknown = row()
+    assert takeEntry(unknown, BookMemory(), knobs) is False  # fields required once set
+
+    # planBuy threads the history columns through to takeEntry
+    burst = Burst(start=ts(0))
+    burst.usd = 5000
+    burst.shares = 20000
+    memory = BookMemory()
+    freshKnobs = params(minNetUsd=5000, maxAccountAgeDays=5.0, maxMarketsSoFar=3)
+    action, shares = planBuy(
+        burst, 10.0, "g", "m", "iran-strike-x", memory, freshKnobs,
+        account="0xa", accountAgeDays=2.0, marketsSoFar=1,
+    )
+    assert action == "trigger"
+    oldKnobs = params(minNetUsd=5000, maxAccountAgeDays=5.0, maxMarketsSoFar=3)
+    blocked, _ = planBuy(
+        burst, 10.0, "g", "m", "iran-strike-x", BookMemory(), oldKnobs,
+        account="0xa", accountAgeDays=9.0, marketsSoFar=1,
+    )
+    assert blocked == "skip"

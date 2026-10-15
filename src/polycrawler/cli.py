@@ -1,14 +1,24 @@
 import time
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
 import polars as pl
 import typer
 
+from polycrawler.backtest import (
+    BacktestParams,
+    formatSummary,
+    loadInputs,
+    prepareBacktest,
+    resolveDataDirs,
+    runBacktest,
+)
 from polycrawler.config import loadConfig
 from polycrawler.discovery import FundingResult, labelRecall, labelRows, runDiscover, runFunding
 from polycrawler.fetch import runFetch
+from polycrawler.sweep import formatSweep, loadSweep, runSweep, writeSweep
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -163,14 +173,70 @@ def echoLabelClusters(labels: list, funding: FundingResult) -> None:
 
 
 @app.command()
-def backtest() -> None:
-    """Copy discovered clusters after splitDate."""
-    typer.echo("not implemented yet")
-    raise typer.Exit(1)
+def backtest(
+    config: Annotated[str, typer.Option("--config")] = "configs/insiderCases.yaml",
+    setOverrides: Annotated[list[str] | None, typer.Option("--set")] = None,
+    dataDir: Annotated[list[str] | None, typer.Option("--data-dir")] = None,
+    runsDir: Annotated[str, typer.Option("--runs-dir")] = "runs",
+) -> None:
+    """Run one backtest from a config file and the local parquet tape."""
+    root = Path.cwd()
+    configPath = Path(config)
+    if not configPath.is_absolute():
+        configPath = root / configPath
+    loaded = loadConfig(str(configPath), setOverrides or [])
+    params = BacktestParams.model_validate(loaded.strategy.model_dump())
+    dirs = resolveDataDirs(root, dataDir or None, loaded.fetch.dataDir)
+    fills, markets, accounts, clusterMap = loadInputs(dirs)
+    endTs = fills.select(pl.col("ts").max()).collect().item()
+    startTs = datetime(
+        loaded.splitDate.year, loaded.splitDate.month, loaded.splitDate.day, tzinfo=timezone.utc
+    )
+    result = runBacktest(
+        fills,
+        markets,
+        accounts,
+        params,
+        startTs,
+        endTs,
+        clusterMap=clusterMap,
+        runsDir=root / runsDir,
+    )
+    typer.echo(formatSummary(result))
+    typer.echo(f"wrote {root / runsDir / result.paramsHash}")
 
 
 @app.command()
-def sweep(sweepFile: Annotated[str | None, typer.Argument()] = None) -> None:
-    """Run a grid of discover + backtest configs."""
-    typer.echo("not implemented yet")
-    raise typer.Exit(1)
+def sweep(
+    sweepFile: Annotated[str, typer.Argument()] = "configs/sweeps/basic.yaml",
+    config: Annotated[str, typer.Option("--config")] = "configs/insiderCases.yaml",
+    dataDir: Annotated[list[str] | None, typer.Option("--data-dir")] = None,
+    runsDir: Annotated[str, typer.Option("--runs-dir")] = "runs",
+    limit: Annotated[int, typer.Option("--limit")] = 25,
+) -> None:
+    """Run a grid of backtest configs and rank them."""
+    root = Path.cwd()
+    configPath = Path(config)
+    sweepPath = Path(sweepFile)
+    if not configPath.is_absolute():
+        configPath = root / configPath
+    if not sweepPath.is_absolute():
+        sweepPath = root / sweepPath
+    loaded = loadConfig(str(configPath))
+    spec = loadSweep(sweepPath)
+    params = BacktestParams.model_validate(loaded.strategy.model_dump())
+    dirs = resolveDataDirs(root, dataDir or None, loaded.fetch.dataDir)
+    fills, markets, accounts, clusterMap = loadInputs(dirs)
+    endTs = fills.select(pl.col("ts").max()).collect().item()
+    startTs = datetime(
+        loaded.splitDate.year, loaded.splitDate.month, loaded.splitDate.day, tzinfo=timezone.utc
+    )
+    prepared = prepareBacktest(fills, markets, accounts, startTs, endTs, clusterMap)
+    ranked = runSweep(prepared, params, spec.grid, spec.objective, spec.minTrades, spec.minEvents)
+    out = writeSweep(ranked, spec.name, root / runsDir)
+    kept = int(ranked.filter(pl.col("eligible")).height) if ranked.height else 0
+    typer.echo(formatSweep(ranked, spec.objective, limit=limit))
+    typer.echo(
+        f"wrote {out}  ({ranked.height} runs, {kept} eligible, "
+        f"objective {spec.objective}, minTrades {spec.minTrades}, minEvents {spec.minEvents})"
+    )

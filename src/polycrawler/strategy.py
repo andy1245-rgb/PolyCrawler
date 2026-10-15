@@ -116,6 +116,9 @@ def planBuy(
     eventSlug: str | None,
     memory: BookMemory,
     params,
+    account: str | None = None,
+    accountAgeDays: float | None = None,
+    marketsSoFar: int | None = None,
 ) -> tuple[str, float]:
     """`trigger` copies the shares seen so far; `add` copies only this fill."""
     if burst.copying:
@@ -124,6 +127,9 @@ def planBuy(
         return "skip", 0.0
     row = {
         "accountGroup": group,
+        "account": account,
+        "accountAgeDays": accountAgeDays,
+        "marketsSoFar": marketsSoFar,
         "marketId": marketId,
         "eventSlug": eventSlug,
         "usd": burst.usd,
@@ -157,6 +163,21 @@ def takeEntry(row: dict, memory: BookMemory, params) -> bool:
         return False
     if params.minEntryPrice is not None and price < params.minEntryPrice:
         return False
+    filterSlugs = getattr(params, "eventSlugFilter", None) or []
+    if filterSlugs:
+        slug = (row.get("eventSlug") or "").lower()
+        if not any(word in slug for word in filterSlugs):
+            return False
+    maxAge = getattr(params, "maxAccountAgeDays", None)
+    if maxAge is not None:
+        age = row.get("accountAgeDays")
+        if age is None or age > maxAge:
+            return False
+    maxMarkets = getattr(params, "maxMarketsSoFar", None)
+    if maxMarkets is not None:
+        seen = row.get("marketsSoFar")
+        if seen is None or seen > maxMarkets:
+            return False
     if params.maxEntriesPerEvent is not None:
         have = memory.copiedMarkets.get((group, key), set())
         if row["marketId"] not in have and len(have) >= params.maxEntriesPerEvent:

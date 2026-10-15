@@ -56,11 +56,20 @@ class StrategyConfig(BaseModel):
 
     minNetUsd: float = 500
     maxEntryPrice: float = 0.5
+    minEntryPrice: float | None = None
+    maxEntriesPerEvent: int | None = None
+    copyRule: Literal["all", "largestPerEvent"] = "all"
+    sizing: Literal["fixed", "mirrorPct"] = "mirrorPct"
+    fixedUsd: float = 100
     mirrorPct: float = 1.0
     maxPositionUsd: float = 1000
+    maxTotalExposureUsd: float | None = None
     exitMode: Literal["followCluster", "holdToResolution"] = "followCluster"
     delaySec: int = 30
     slippageBps: int = 50
+    maxAccountAgeDays: float | None = None
+    maxMarketsSoFar: int | None = None
+    eventSlugFilter: list[str] | None = None
 
 
 class Config(BaseModel):
