@@ -24,8 +24,12 @@ Per config the report carries:
     <= +/-2  ->  "no demonstrable effect, keep default"
 
 Run:
-  uv run python scripts/linkComposition.py [--config configs/base.yaml]
-      [--data-dir data] [--tmp-root /tmp]
+  uv run python scripts/linkComposition.py --config configs/insiderCases.yaml
+      --data-dir data            (ETHERSCAN_API_KEY must be set; caches make
+                                  a no-op replay offline)
+  --data-dir overrides the baseline dir; --config must be the config the
+  baseline snapshot was produced WITH (its splitDate gates both the funding
+  uses and the coTrade windows).
 """
 
 import argparse
@@ -272,7 +276,7 @@ def main() -> None:
     runFunding(frozen, refresh=False)
     newParents, newMembers = loadSnapshot(tmp)
     report = compare(oldParents, oldMembers, newParents, newMembers)
-    print(json.dumps(report, indent=2), default=str)
+    print(json.dumps(report, indent=2, default=str))
     print(f"verdict: {report['verdict']}")
     print(f"({time.time() - t0:.0f}s)")
 
