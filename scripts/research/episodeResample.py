@@ -473,8 +473,6 @@ def main() -> None:
         print(bandMarkdown(band))
 
     print(f"\n-- cells ({args.boots} episode bootstraps, seed {SEED}) --")
-
-    print(f"\n-- cells ({args.boots} episode bootstraps, seed {SEED}) --")
     rows = []
     for cell in CELLS:
         entries = nonmil if cell["universe"] == "nonmilitary" else mil
