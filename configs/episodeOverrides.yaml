@@ -1,0 +1,21 @@
+# Manual episode overrides for scripts/research/episodeResample.py.
+#
+# The episode graph is data-derived: two slugs are the same episode when they
+# share >= --k (default 5) distinct accounts whose >=$5k bursts appear in both
+# (union-find over slug nodes). Only add entries here when a HUMAN knows two
+# slugs are one process the account tape cannot see (or is not): e.g. a
+# date-ladder rung whose early tape predates the snapshot, or a spurious
+# account shared between two genuinely separate processes.
+#
+# Leave this file empty unless the graph needs correcting; every added entry
+# should carry a one-line reason so the override stays auditable.
+#
+# Format (both keys optional, both empty by default):
+merge: []          # list of ["<slugA>", "<slugB>", ...] groups to FORCE into one episode
+exclude: []        # list of ["<slugA>", "<slugB>"] pairs to SEVER from auto-merging
+#
+# Example (commented out; the slugs are placeholders, not real events):
+# merge:
+#   - ["us-strikes-iran-by-<date-1>", "us-strikes-iran-by-<date-2>"]  # reason: same rung, early tape missing
+# exclude:
+#   - ["<slugA>", "<slugB>"]                                         # reason: shared bot account, separate processes
