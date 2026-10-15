@@ -74,30 +74,37 @@ alreadyCoveredByShipped:
 
 # Explicit risk register (substring containment cuts both ways):
 risks:
-  - note: "operation" is the loosest verb: it can match non-force events
+  - >-
+    operation is the loosest verb: it can match non-force events
     (e.g. rescue/evacuation operations). Accepted pre-registration risk —
     the grounding step (commit 2) counts what it actually catches, and any
     non-force episode found there is reported as a negative control, never
     silently dropped.
-  - note: "attack" can appear in non-military phrasing. Same treatment:
+  - >-
+    attack can appear in non-military phrasing. Same treatment:
     report, do not prune.
-  - note: "military" generalizes the shipped pakistan-military token; the
+  - >-
+    military generalizes the shipped pakistan-military token; the
     incremental evaluation subtracts all shipped matches before reporting.
-  - note: keywords are substring keywords; a bare "annex" also hits
+  - >-
+    keywords are substring keywords; a bare "annex" also hits
     "anniversary"-shaped slugs (none expected in a force-event universe;
     verified at the grounding step).
 
 # ---------------------------------------------------------------- omitted ---
 omitted:
-  - sanction:      state coercion but NOT use-of-force; different mechanism
-                   label (capital-control enforcement). If the extension
-                   passes, it is a separate later test, not part of this one.
-  - named entities (yemen, cartel, mexico, assad, sudan, ...): the review's
-                   constraint is episode-name-free, structural verbs only.
-  - leftovers from the mechanism memo's first tuple (border, capture-like
-                   nouns kept only when verifiable verbs) were resolved into
-                   the tuple above or rejected here: "border" is a place
-                   noun, not a force predicate.
+  - >-
+    sanction: state coercion but NOT use-of-force; different mechanism
+    label (capital-control enforcement). If the extension
+    passes, it is a separate later test, not part of this one.
+  - >-
+    named entities (yemen, cartel, mexico, assad, sudan, ...): the review's
+    constraint is episode-name-free, structural verbs only.
+  - >-
+    leftovers from the mechanism memo's first tuple (border and capture-like
+    nouns kept only when verifiable verbs) were resolved into
+    the tuple above or rejected here (border is a place
+    noun, not a force predicate).
 
 # ------------------------------------------------- evaluation contract ---
 evaluation:
