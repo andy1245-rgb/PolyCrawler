@@ -39,9 +39,11 @@ agents.md
 *.db
 *.sqlite3
 /data/
+/.cacheOpsExtensionEntrySweep/
 /runs/
 /logs/
 /watcher.log
+scratch-*.log
 
 # Cursor assets (local workspace images)
 assets/
