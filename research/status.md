@@ -372,7 +372,8 @@ tape** (daily report restarts it):
   reference cell order-level dominates on robustness (boot p5 +0.189 vs
   -0.043, P(>0) 98% vs 92%); orders >=$5k spanning >1 burst window only 1/26
   so far. The ≥$5k cell is still thin (n=4-5) — do NOT call it until the
-  full pull exits; a monitor fires the analysis automatically
+  full pull exits; `scripts/research/orderBurstMonitor.py` waits out the
+  full sample plan then fires the analysis automatically
   (`logs/orderBurstAnalysis.log`).
 - duneOrderBurst.report: None-safe H1/H2 (sample spans can be half-empty).
 
@@ -383,7 +384,29 @@ tape** (daily report restarts it):
   $10k/≤0.35 cells hold p5 +0.39..+0.57 vs +0.13 for the $5k line with
   ~150-240 trades — candidate for the live watch rule pending more OOS.
 
-### git note
-- dataDirs plumbing + parity tool + analysis scripts uncommitted at session
-  end (commit when asked).
+### session 2026-10-15 (later): monitor + dirs routing + fingerprint hardening
+- The §9 "git note" above is stale — b153ae3 landed the dataDirs routing,
+  parity tool and on-chain analysis.
+- `scripts/research/orderBurstMonitor.py` (new): the promised monitor, a
+  single-purpose cron job. It does NOT pull: it polls
+  `data/raw/dune/onchainBuy_*.csv` until the puller's own
+  `orderBurstOnchain.sampleDays()` plan is fully cached (day list imported,
+  not restated; cache-complete mirrors the puller's own skip rule), then
+  calls `orderBurstOnchainAnalysis.main()` in-process with its output teed
+  to `logs/orderBurstAnalysis.log`. `--timeout-hours` guard exits 1 under
+  cron if the pull is still incomplete.
+- Data dirs of the four hardcoded research scripts (`engineParity`,
+  `orderBurstOnchainAnalysis`, `duneOrderBurst`, `entrySweep`) now resolve
+  through `dirsFromConfig()` — CLI `--data-dir` > `fetch.dataDirs` >
+  `fetch.dataDir`, engineParity reading the pinned config like the engine
+  side; defaults unchanged (data/ + data/universe), classification logic
+  untouched.
+- entrySweep cache fingerprint hardened: now covers fills + markets parquet
+  size, mtime and metadata-only row counts per dir (`entries_v2_` cache
+  name, `CACHE_SCHEMA_VERSION` constant) — an equal-size in-place rewrite
+  no longer silently reuses a stale cache.
+- Today's data jobs: on-chain pull RESUMED (41 of 74+ sampled days cached
+  before the resume; remaining days pulling now via the external background
+  process, monitor above fires the analysis when it exits); OOS fetch
+  (`configs/oosFetch.yaml`) re-attempted in background.
 
