@@ -37,33 +37,49 @@ dob = importlib.util.module_from_spec(spec)
 sys.modules["dob"] = dob
 spec.loader.exec_module(dob)  # burstEntries, orderEntries, annotate, report, RULE_MIN_USD
 
+_spec = importlib.util.spec_from_file_location(
+    "researchData", ROOT / "scripts" / "research" / "researchData.py")
+researchData = importlib.util.module_from_spec(_spec)
+sys.modules["researchData"] = researchData
+_spec.loader.exec_module(researchData)  # researchDataDirs, militaryMarketsFrame
+
 LEG_FIELDS = ["ts", "account", "marketId", "outcome", "shares", "price",
               "usd", "orderHash", "exchange"]
 MID = int(dob.RULE_MIN_USD)
 LOW = 1000
 
 
-def loadLegs(dir_: Path) -> pl.DataFrame:
+def loadLegs(dir_: Path) -> tuple[pl.DataFrame, int, int]:
+    """Legs from the sampled-day caches, plus (sampled days, days with legs).
+    Each CSV is parsed exactly once — the frame itself carries the
+    header-only check, so no second read for a height count.
+
+    Header-only days count as sampled (a zero-leg day is a valid pull
+    result); days whose rows all lack a ts are not counted as legs. If no
+    day has any legs, exit with a clear message instead of letting
+    pol.concat raise its ValueError."""
     caches = sorted(dir_.glob("onchainBuy_*.csv"))
     if not caches:
         sys.exit(f"no onchainBuy_*.csv under {dir_}; run orderBurstOnchain.py first")
     frames = []
     for p in caches:
-        if pl.read_csv(p, infer_schema_length=0).height <= 1:
-            continue
-        frame = pl.read_csv(p, infer_schema_length=0).select(LEG_FIELDS).with_columns(
+        frame = pl.read_csv(p, infer_schema_length=0)
+        if frame.height <= 1:
+            continue  # header-only day: sampled, but no legs
+        frame = frame.select(LEG_FIELDS).with_columns(
             pl.col("ts").str.to_datetime(time_zone="UTC", strict=False),
             pl.col("shares").cast(pl.Float64), pl.col("price").cast(pl.Float64),
             pl.col("usd").cast(pl.Float64))
         frames.append(frame.drop_nulls("ts"))
     fills = pl.concat(frames, how="vertical")
-    return fills.unique(subset=["marketId", "orderHash", "account", "ts"], keep="first")
+    return (fills.unique(subset=["marketId", "orderHash", "account", "ts"], keep="first"),
+            len(caches), len(frames))
 
 
-def universeFills(militaryIds: set[str], dirs: list[Path]) -> pl.DataFrame:
+def universeFills(dirs: list[Path]) -> pl.DataFrame:
     """All BUY fills of the tracked universe (full tape — firstTs here must
     match the research convention: wallet age counts markets of ANY category,
-    not just military), military markets optionally marked for entries."""
+    not just military)."""
     parts = []
     for d in dirs:
         if (d / "fills.parquet").exists():
@@ -111,29 +127,43 @@ def addRetReal(entries: pl.DataFrame, tape: pl.DataFrame) -> pl.DataFrame:
                           .otherwise(-1.0)))
 
 
-def main() -> None:
+def parseArgs():
+    """CLI parsing, only on the real command line (the monitor calls
+    main(dir_=...) directly with its own in-process arguments)."""
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", default=str(ROOT / "data" / "raw" / "dune"))
+    parser.add_argument("--dir", default=None,
+                        help="directory holding the onchainBuy_*.csv day caches")
     parser.add_argument("--data-dir", action="append", default=None)
-    args = parser.parse_args()
-    dir_ = Path(args.dir)
+    return parser.parse_args()
+
+
+def main(dir_: str | Path | None = None) -> None:
+    # dir_ argument (the monitor's in-process call) wins over --dir > default
+    # and skips argv parsing entirely.
+    requested = None
+    if dir_ is None:
+        args = parseArgs()
+        requested = args.data_dir
+        dir_ = args.dir or ROOT / "data" / "raw" / "dune"
+    dir_ = Path(dir_)
     # fills/markets dirs routed through the config system (same precedence as
     # the engine); defaults keep the data/ + data/universe research scope.
-    fillDirs = dob.researchDataDirs(ROOT, args.data_dir)
-    sampledDays = len(list(dir_.glob("onchainBuy_*.csv")))
-    daysWithLegs = sum(1 for p in dir_.glob("onchainBuy_*.csv")
-                       if pl.read_csv(p, infer_schema_length=0).height > 1)
+    fillDirs = researchData.researchDataDirs(ROOT, requested)
+    fillsAll, sampledDays, daysWithLegs = loadLegs(dir_)   # each csv read once
     print(f"sampled days: {daysWithLegs} with legs of {sampledDays} pulled "
           f"({time.time() - t0:.0f}s)\n")
 
-    markets = dob.militaryMarkets(fillDirs)
+    markets = researchData.militaryMarketsFrame(fillDirs)
     militarySet = set(markets["marketId"].to_list())
     print(f"military markets: {len(militarySet)} across {markets['eventSlug'].n_unique()} events",
           flush=True)
 
-    fills = loadLegs(dir_).filter(pl.col("marketId").is_in(militarySet))
-    universe = universeFills(militarySet, fillDirs)
+    if fillsAll.height == 0:
+        sys.exit(f"{daysWithLegs} day cache(s) under {dir_} carry no legs; "
+                 "run orderBurstOnchain.py again once more days are pulled")
+    fills = fillsAll.filter(pl.col("marketId").is_in(militarySet))
+    universe = universeFills(fillDirs)
     firstSeen = universe.group_by("account").agg(firstTs=pl.col("ts").min())
     tape = buildTape(universe)
     print(f"legs {fills.height} military fills on sampled days, "

@@ -19,36 +19,33 @@ Run: uv run python scripts/research/entrySweep.py \
 
 import argparse
 import hashlib
+import importlib.util
 import itertools
-import json
 import random
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import polars as pl
 import yaml
-from polycrawler.backtest import dirsFromConfig
-from polycrawler.config import Config, FetchConfig
 
 t0 = time.time()
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_DIR = ROOT / "data" / "entrySweep"
 
-# Research cells span the accrued universe (data/ + data/universe); dir
-# resolution goes through the config system like the engine side.
-RESEARCH_FETCH = Config(fetch=FetchConfig(dataDirs=["data", "data/universe"]))
+# shared research-data plumbing (dir resolution + the military markets frame)
+_sharedSpec = importlib.util.spec_from_file_location(
+    "researchData", ROOT / "scripts" / "research" / "researchData.py")
+researchData = importlib.util.module_from_spec(_sharedSpec)
+sys.modules["researchData"] = researchData
+_sharedSpec.loader.exec_module(researchData)
 
 FILL_WINDOW_SEC = 300
-HALF_SPLIT = datetime(2025, 6, 1, tzinfo=timezone.utc)
+HALF_SPLIT = datetime(2025, 6, 1, tzinfo=UTC)  # 2025-06-01 split, same instant as before
 BOOTS = 1000
 MIN_CELL = 20
-
-MILITARY = ("iran", "israel", "hezbollah", "houthi", "lebanon", "hamas", "gaza",
-            "ukraine", "russia", "taiwan", "pakistan-military", "maduro", "venezuela",
-            "nato", "strike")
 
 GRID_AXES = {
     "minUsd": [500, 1000, 2000, 5000, 10000, 20000],
@@ -78,29 +75,18 @@ def dataFingerprint(dirs: list[str]) -> str:
     digest.update(f"entrySweepCacheSchema{CACHE_SCHEMA_VERSION}".encode())
     for d in dirs:
         for name in ["fills.parquet", "markets.parquet"]:
-            p = Path(d) / name
+            st = (Path(d) / name).stat()  # one stat per file, both fields from it
             digest.update(str(Path(d).resolve()).encode())
             digest.update(name.encode())
-            digest.update(str(p.stat().st_size).encode())
-            digest.update(str(p.stat().st_mtime_ns).encode())
-            digest.update(str(_rows(p)).encode())
+            digest.update(str(st.st_size).encode())
+            digest.update(str(st.st_mtime_ns).encode())
+            digest.update(str(_rows(Path(d) / name)).encode())
     return digest.hexdigest()[:10]
-
-
-def militaryMarketsTable(markets: pl.DataFrame) -> pl.DataFrame:
-    bases = markets.unique("marketId", keep="last").select(
-        "marketId", "eventSlug", "winner",
-        pl.coalesce("resolvedAt", "endDate").alias("resolvedAt"))
-    return bases.filter(pl.col("eventSlug").map_elements(
-        lambda s: any(k in (s or "").lower() for k in MILITARY), return_dtype=pl.Boolean))
 
 
 def buildEntries(dirs: list[str]) -> pl.DataFrame:
     lazy = pl.concat([pl.scan_parquet(f"{d}/fills.parquet") for d in dirs], how="diagonal_relaxed")
-    markets = pl.concat(
-        [pl.read_parquet(f"{d}/markets.parquet") for d in dirs], how="diagonal_relaxed")
-    milMarkets = militaryMarketsTable(markets)
-    cols = ["ts", "account", "marketId", "outcome", "side", "size", "price"]
+    milMarkets = researchData.militaryMarketsFrame(dirs)
     firstSeen = lazy.group_by("account").agg(firstTs=pl.col("ts").min()).collect()
     entries = (
         lazy.filter(pl.col("side") == "BUY").drop("side")
@@ -227,7 +213,7 @@ def main() -> None:
     parser.add_argument("--grid", default="configs/sweeps/militaryEntryGrid.yaml")
     parser.add_argument("--limit", type=int, default=30)
     args = parser.parse_args()
-    dirs = [str(p) for p in dirsFromConfig(ROOT, args.data_dir, RESEARCH_FETCH)]
+    dirs = [str(p) for p in researchData.researchDataDirs(requested=args.data_dir)]
     spec = yaml.safe_load(Path(args.grid).read_text()) or {}
     grid = spec.get("grid") or {}
     entries = loadEntries(dirs, args.refresh)
