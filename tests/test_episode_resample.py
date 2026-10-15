@@ -203,7 +203,7 @@ def test_dataDerivedK_reads_the_fine_grid() -> None:
     # the fine grid covers the published gap that verdict-flipping cells
     # lived in: step-2 coverage of 1..40 plus the 50/100 spots, and the
     # K=5 / K=20 anchors of the old tables
-    assert ks[:4] == [1, 2, 3, 5] and 20 in ks and 30 in ks
+    assert ks[:5] == [1, 2, 3, 4, 5] and 20 in ks and 30 in ks
     assert ks[-2:] == [50, 100] and all(k in ks for k in range(6, 41, 2))
     frame = pl.DataFrame({"k": [1, 3, 5, 8, 20, 30], "iranFebEpisodes":
                           [1, 1, 1, 2, 2, 3]})

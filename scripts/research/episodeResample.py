@@ -198,7 +198,7 @@ def sensitivityKs() -> list[int]:
     """Fine sensitivity grid: step 2 across 1..40 (both the K=5 and the old
     K=20 anchors must be in it, so 1-5 is enumerated explicitly) plus the
     50/100 spots the old table had."""
-    fine = [1, 2, 3, 5] + sorted(set([k for k in range(4, 41, 2)]))
+    fine = sorted(set([1, 2, 3, 5] + [k for k in range(4, 41, 2)]))
     return fine + [50, 100]
 
 
@@ -485,7 +485,7 @@ def main() -> None:
             ctrlSlugs = sorted(ctrl["eventSlug"].unique().to_list())
             ctrlLabels = episodeLabels(
                 episodeGroups(sharedAccountEdges(ctrl), ctrlSlugs,
-                              k=args.k, overrides=overrides))
+                              k=kGate, overrides=overrides))
             labelsForCell = ctrlLabels
         else:
             labelsForCell = labels
