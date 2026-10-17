@@ -1,0 +1,39 @@
+# Discovery on the 200-event oosExpansion military tape (research/status.md
+# oosExpansion fetch). splitDate 2026-01-01; no label file — no ground truth
+# on this fresh universe. Discovery section mirrors eventUniverse.yaml.
+splitDate: 2026-01-01
+
+fetch:
+  dataDir: data/oosExpansion
+
+discovery:
+  maxAccountAgeDays: 14
+  maxMarketsTraded: 15
+  maxBuyPrice: 0.3
+  minBetUsd: 1000
+  maxFlagLeadHours: 168
+  minSignals: 4
+  minSuspiciousAccounts: 2
+  excludedFunders: []
+  hubMinCounterparties: 50
+  fundingHops: 2
+  minFundingUsd: 1
+  minBridgeDepositUsd: 100
+  bridgeHubs:
+    - "0xf70da97812cb96acdf810712aa562db8dfa3dbef"
+  bridgeProbeLimit: 3
+  coTradeWindowSec: 10
+  minCoTrades: 2
+  minCoTradeMarkets: 2
+  relayRequestsPerSec: 1
+  relayPageLimit: 50
+  httpMaxWorkers: 8
+
+strategy:
+  minNetUsd: 500
+  maxEntryPrice: 0.5
+  mirrorPct: 1.0
+  maxPositionUsd: 1000
+  exitMode: followCluster
+  delaySec: 30
+  slippageBps: 50
