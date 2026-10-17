@@ -12,7 +12,12 @@ if ! pgrep -f "liveWatcher.py" >/dev/null 2>&1; then
     echo "$(date '+%F %T') watcher was down, restarted"
 fi
 
-# 2. Daily report backfill (marker file makes it once-per-day; paperPnl is idempotent)
+# 2. Exec-fill stamps: CLOB book at T+300s/T+600s for every lane's alerts
+#    (research/executionStamps.md; rides the every-tick cadence, not the
+#    once-a-day report block, per the pre-registered stampDrivenS semantics).
+uv run python scripts/bookExecStamps.py >> logs/dailyReport.log 2>&1
+
+# 3. Daily report backfill (marker file makes it once-per-day; paperPnl is idempotent)
 TODAY=$(date +%F)
 if [ "$(cat logs/lastDailyReport 2>/dev/null)" != "$TODAY" ]; then
     echo "$(date '+%F %T') running daily paper report" >> logs/dailyReport.log
