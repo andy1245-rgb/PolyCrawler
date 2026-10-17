@@ -427,6 +427,12 @@ product of all four; the ranked shortlist is §3.
   tradeable ret p5 < 0 on ≥ 100 games → dead (record as citation-confirmed
   decay); if excess survives ≥ 15pp → the whole family graduates to a live
   scanner design doc.
+- **RESULT (sportsT7d.md, 2026-10-17): NO-GO — falsified on our tape**
+  (kill rule): headline 0.55–0.60 cell n=21 with excess −9.9pp vs implied
+  (z −4.4 vs the claimed 0.833 yes_rate), trailing column +10.5pp still FAIL;
+  structurally, T-7d liquidity exists almost only for NFL now (MLB/NBA
+  don't list ≥8d pre-game in V2; NHL dormants), and the e23 deployment
+  cell is empty (n=1/1,026). No live-lane capital; scanner idea closed.
 
 ### (i) Long-duration sum-violation captures in thin books (negRisk sum < $1, hours-to-months)
 
