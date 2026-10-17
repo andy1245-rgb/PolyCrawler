@@ -50,7 +50,7 @@ researchData = importlib.util.module_from_spec(_spec)
 sys.modules["researchData"] = researchData
 _spec.loader.exec_module(researchData)  # RESEARCH_FETCH (fetch.dataDirs)
 
-from polycrawler.backtest import dirsFromConfig  # noqa: E402  (same routing as entrySweep)
+from polycrawler.backtest import dirsFromConfig  # same routing as entrySweep
 
 AGE_WINDOWS = {  # name -> (minAge exclusive, maxAge inclusive)
     "all": (0.0, 5.0),      # shipped rule: fresh <= 5d, <= 3 markets
@@ -126,10 +126,28 @@ def delayRealReturn(entries: pl.DataFrame) -> pl.DataFrame:
         .then(1 / cost - 1).otherwise(-1.0))
 
 
+def episodeTransport():
+    """By-path loader for the additive episode port — same pattern as every
+    other research script in this package; only imported when --episodes."""
+    if "episodeTransport" in sys.modules:
+        return sys.modules["episodeTransport"]
+    spec = importlib.util.spec_from_file_location(
+        "episodeTransport", ROOT / "scripts" / "research" / "episodeTransport.py")
+    epT = importlib.util.module_from_spec(spec)
+    sys.modules["episodeTransport"] = epT
+    spec.loader.exec_module(epT)
+    return epT
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", action="append", default=None)
     parser.add_argument("--refresh", action="store_true")
+    parser.add_argument("--episodes", action="store_true",
+                        help="additive: episode-level regrouping + K* gate "
+                             "columns / composed verdict on the whole-burst "
+                             "cell (per-event columns and ranking unchanged; "
+                             "flag off = exactly the shipped behavior)")
     args = parser.parse_args()
     dirs = [str(p) for p in dirsFromConfig(ROOT, args.data_dir, researchData.RESEARCH_FETCH)]
     entries = esw.loadEntries(dirs, args.refresh)
@@ -137,8 +155,16 @@ def main() -> None:
     print(f"entries {entries.height} landed300 {100 * entries['landed300'].mean():.2f}% "
           f"({time.time() - t0:.0f}s)", flush=True)
 
+    epT = episodeTransport() if args.episodes else None
+    episodeUnits = epT.buildUnits(entries) if epT is not None else None
+    if episodeUnits is not None:
+        epT.printUnits(episodeUnits, entries.height)
+
     rng = random.Random(7)
     rows = []
+    cols = list(COLS)
+    if episodeUnits is not None:  # additive columns, per-event table untouched
+        cols += ["episodes", "epP", "epP5", "epVerdict", "verdict"]
     for u in USDS:
         for p in PRICES:
             for w, (mn, mx) in AGE_WINDOWS.items():
@@ -149,24 +175,41 @@ def main() -> None:
                 landed = (delayRealReturn(df.filter(pl.col("landed300")))
                           .with_columns(pl.col("retReal50").alias("retReal")))
                 dr = evalCell(landed, rng)
-                rows.append({"minUsd": u, "maxPrice": p, "age": w,
-                             "n": base["n"], "retReal": base["ret"], "p5": base["p5"],
-                             "P>0": base["p"], "h1": base["h1"], "h2": base["h2"],
-                             "events": base["events"], "accts": base["account"],
-                             "share": base["eventShare"], "topEvent": base["topEvent"],
-                             "topR": base["topR"],
-                             "landed%": round(100 * int(df["landed300"].sum()) / max(df.height, 1), 1),
-                             "landed30%": round(100 * int(df["landed30"].sum()) / max(df.height, 1), 1),
-                             "drN": dr["n"], "drRetReal": dr["ret"], "drP5": dr["p5"],
-                             "drP>0": dr["p"], "drShare": dr["eventShare"]})
+                row = {"minUsd": u, "maxPrice": p, "age": w,
+                       "n": base["n"], "retReal": base["ret"], "p5": base["p5"],
+                       "P>0": base["p"], "h1": base["h1"], "h2": base["h2"],
+                       "events": base["events"], "accts": base["account"],
+                       "share": base["eventShare"], "topEvent": base["topEvent"],
+                       "topR": base["topR"],
+                       "landed%": round(100 * int(df["landed300"].sum()) / max(df.height, 1), 1),
+                       "landed30%": round(100 * int(df["landed30"].sum()) / max(df.height, 1), 1),
+                       "drN": dr["n"], "drRetReal": dr["ret"], "drP5": dr["p5"],
+                       "drP>0": dr["p"], "drShare": dr["eventShare"]}
+                if episodeUnits is not None:
+                    # episode gate rides on the whole-burst cell; the composed
+                    # verdict adds the episode view to the pre-registered per-event
+                    # gates (base + delay-realistic) — it can only ever flip
+                    # PASS -> FAIL/INCON, never the other way
+                    ep = epT.episodeGate(df, episodeUnits)
+                    gates = (epT.eventGate(base.get("p5"), base.get("p")),
+                             epT.eventGate(dr.get("p5"), dr.get("p")))
+                    combined = "PASS" if all(g == "PASS" for g in gates) else (
+                        "FAIL" if "FAIL" in gates else "INCON")
+                    row.update({"episodes": ep["episodes"], "epP": ep["epP"],
+                                "epP5": ep["epP5"], "epVerdict": ep["epVerdict"],
+                                "verdict": epT.composeVerdict(combined, ep["epVerdict"])})
+                rows.append(row)
                 print(f"done {u}/{p}/{w} n={base['n']} ({time.time() - t0:.0f}s)", flush=True)
     table = pl.DataFrame(rows)
     print("\n=== candidate neighborhood (minUsd x maxPrice x age, <= 3 markets) ===")
     for r in rows:
-        print(" | ".join(str(r.get(c)) for c in COLS))
+        print(" | ".join(str(r.get(c)) for c in cols))
     print("\nranked by native p5:")
-    with pl.Config(tbl_rows=60, tbl_cols=len(COLS), fmt_str_lengths=40):
+    with pl.Config(tbl_rows=60, tbl_cols=len(cols), fmt_str_lengths=40):
         print(table.sort("p5", descending=True, nulls_last=True))
+    if episodeUnits is not None and "verdict" in table.columns:
+        print("\nverdicts (composed: per-event gates AND episode K* gate):")
+        print(table.group_by("verdict").len().sort("verdict"))
     out = ROOT / "data" / "entrySweep" / "oosTransportCells.parquet"
     table.write_parquet(out)
     print(f"\nwrote {out}")

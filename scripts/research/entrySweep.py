@@ -218,14 +218,32 @@ def gridCells(grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
     return cells
 
 
-def runSweep(entries: pl.DataFrame, grid: dict[str, list[Any]]) -> pl.DataFrame:
+def _episodeTransport():
+    """By-path load of the additive episode-port module (feature/episodeScope
+    machinery behind runSweep's episodeUnits param) — loaded only when asked
+    for, so the default sweep path never pays for it."""
+    if "episodeTransport" in sys.modules:
+        return sys.modules["episodeTransport"]
+    spec = importlib.util.spec_from_file_location(
+        "episodeTransport", ROOT / "scripts" / "research" / "episodeTransport.py")
+    epT = importlib.util.module_from_spec(spec)
+    sys.modules["episodeTransport"] = epT
+    spec.loader.exec_module(epT)
+    return epT
+
+
+def runSweep(entries: pl.DataFrame, grid: dict[str, list[Any]],
+             episodeUnits: dict[str, Any] | None = None) -> pl.DataFrame:
     rng = random.Random(7)
     rows = []
     for cell in gridCells(grid):
         row = dict(cell)
         row.update(evaluate(filterCell(entries, cell), rng))
         rows.append(row)
-    return pl.DataFrame(rows).sort(["p5", "ret"], descending=True, nulls_last=True)
+    ranked = pl.DataFrame(rows).sort(["p5", "ret"], descending=True, nulls_last=True)
+    if episodeUnits is not None:  # additive: episode columns only, sort untouched
+        ranked = _episodeTransport().attach(ranked, entries, episodeUnits)
+    return ranked
 
 
 def main() -> None:
@@ -234,15 +252,27 @@ def main() -> None:
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--grid", default="configs/sweeps/militaryEntryGrid.yaml")
     parser.add_argument("--limit", type=int, default=30)
+    parser.add_argument("--episodes", action="store_true",
+                        help="additive: regroup cell events into tape-level "
+                             "account-overlap episodes, report per-episode "
+                             "p5/P(>0) beside the per-event ranking and apply "
+                             "the K* gate (composes the verdict; flag off = "
+                             "exactly the shipped behavior)")
     args = parser.parse_args()
     dirs = [str(p) for p in researchData.researchDataDirs(requested=args.data_dir)]
     spec = yaml.safe_load(Path(args.grid).read_text()) or {}
     grid = spec.get("grid") or {}
     entries = loadEntries(dirs, args.refresh)
-    ranked = runSweep(entries, grid)
+    epT = _episodeTransport() if args.episodes else None
+    episodeUnits = epT.buildUnits(entries) if epT is not None else None
+    if episodeUnits is not None:
+        epT.printUnits(episodeUnits, entries.height)
+    ranked = runSweep(entries, grid, episodeUnits=episodeUnits)
     good = ranked.filter(pl.col("ret").is_not_null())
     with pl.Config(tbl_rows=60, fmt_str_lengths=30):
         print(good.head(args.limit))
+    if episodeUnits is not None:
+        epT.episodeSummary(ranked, episodeUnits)
     print(f"cells {ranked.height} ({good.height} eligible) "
           f"({time.time() - t0:.0f}s)", flush=True)
 
