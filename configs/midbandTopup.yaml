@@ -1,0 +1,263 @@
+# Mid-band top-up roster: fresh military-extension cohort for
+# research/midbandTopup.md (option a, pre-registered). 150
+# resolved military slugs, gamma volume >= $100,000,
+# <= 5-per-stem cap, excluding data/, data/universe, data/oos,
+# data/oosExpansion, data/midTopup and every existing roster config.
+# Selected on gamma event metadata ONLY (no fill/burst content seen).
+# Pure target: data/midTopup (R16's mid-band [0.55,0.85) cell top-up).
+splitDate: '2026-01-01'
+
+fetch:
+  dataDir: data/midTopup
+  eventSlugs:
+    # stem: another-iran-strike (2)
+    - another-iran-strike-on-israel-in-2024
+    - another-iran-strike-on-israel-in-october
+    # stem: another-israeli-military-action-against-iran (1)
+    - another-israeli-military-action-against-iran-in-2024
+    # stem: another-us-military-action-against-iran (3)
+    - another-us-military-action-against-iran-before-2026
+    - another-us-military-action-against-iran-by-monday
+    - another-us-military-action-against-iran-by-sunday
+    # stem: arch-will-russia-capture-myrnohard (1)
+    - arch-will-russia-capture-myrnohard-by-september-30
+    # stem: bank-of-russia-decision (1)
+    - bank-of-russia-decision-in-february
+    # stem: china-x-taiwan-military-clash-by (1)
+    - china-x-taiwan-military-clash-by
+    # stem: fauci-extradited-to-russia (1)
+    - fauci-extradited-to-russia
+    # stem: gulf-state-military-action-against-iran-by (1)
+    - gulf-state-military-action-against-iran-by
+    # stem: how-many-different-countries-will-israel-strike (1)
+    - how-many-different-countries-will-israel-strike-in-november
+    # stem: how-many-times-will-the-us-strike-somalia (1)
+    - how-many-times-will-the-us-strike-somalia-in-february
+    # stem: internet-access-restored (1)
+    - internet-access-restored-in-iran-by
+    # stem: iran-action (1)
+    - iran-action-by-friday
+    # stem: iran-agrees-to-end-enrichment-of-uranium (3)
+    - iran-agrees-to-end-enrichment-of-uranium-by-april-30
+    - iran-agrees-to-end-enrichment-of-uranium-by-march-31
+    - iran-agrees-to-end-enrichment-of-uranium-by-may-31-945
+    # stem: iran-agrees-to-unrestricted-shipping (2)
+    - iran-agrees-to-unrestricted-shipping-through-hormuz-by-june-30
+    - iran-agrees-to-unrestricted-shipping-through-hormuz-by-may-31
+    # stem: iran-announces-withdrawal-from-mou-negotiations-byptptpt (1)
+    - iran-announces-withdrawal-from-mou-negotiations-byptptpt-20260622191732319
+    # stem: iran-closes-its-airspace-byptptpt (1)
+    - iran-closes-its-airspace-byptptpt-20260609184135829
+    # stem: iran-military-action-against (1)
+    - iran-military-action-against-by-april-30
+    # stem: iran-military-action-against-a-gulf-state-onptptpt (1)
+    - iran-military-action-against-a-gulf-state-onptptpt-20260708212328295
+    # stem: iran-military-action-against-israel (1)
+    - iran-military-action-against-israel-on-628
+    # stem: iran-military-action-against-israel-on (1)
+    - iran-military-action-against-israel-on
+    # stem: iran-military-response (1)
+    - iran-military-response-by-august-12
+    # stem: iran-military-response-by (1)
+    - iran-military-response-by
+    # stem: iran-nuke (2)
+    - iran-nuke-in-2024
+    - iran-nuke-in-2025
+    # stem: iran-strike (3)
+    - iran-strike-on-israel-before-december
+    - iran-strike-on-israel-in-june
+    - iran-strike-on-qatar-by-january-31
+    # stem: iran-successfully-targets-shipping-onptptpt (1)
+    - iran-successfully-targets-shipping-onptptpt-20260625225210236
+    # stem: iran-x-israel-conflict-ends (1)
+    - iran-x-israel-conflict-ends-before-july
+    # stem: iranian-coup-attempt (1)
+    - iranian-coup-attempt-before-july
+    # stem: israel-and-saudi-arabia-normalize-relations (1)
+    - israel-and-saudi-arabia-normalize-relations-in-2025
+    # stem: israel-announces-ceasefire (2)
+    - israel-announces-ceasefire-by-thursday
+    - israel-announces-ceasefire-by-tomorrow
+    # stem: israel-announces-ceasefire-extended-by (1)
+    - israel-announces-ceasefire-extended-by
+    # stem: israel-closes-its-airspace-by (1)
+    - israel-closes-its-airspace-by
+    # stem: israel-military-action-against-iran (4)
+    - israel-military-action-against-iran-by-167
+    - israel-military-action-against-iran-by-friday-477
+    - israel-military-action-against-iran-in-april
+    - israel-military-action-against-iran-in-july
+    # stem: israel-military-response-against-iran (2)
+    - israel-military-response-against-iran-by-friday-oct-25
+    - israel-military-response-against-iran-in-october
+    # stem: israel-military-response-against-iran-when-oct (1)
+    - israel-military-response-against-iran-when-oct-14-20
+    # stem: israel-strikes-iran (4)
+    - israel-strikes-iran-before-2026
+    - israel-strikes-iran-by-january-23-2026
+    - israel-strikes-iran-by-october-31
+    - israel-strikes-iran-by-september-30
+    # stem: israel-x-hamas-ceasefire (5)
+    - israel-x-hamas-ceasefire-before-2026
+    - israel-x-hamas-ceasefire-before-june-2025
+    - israel-x-hamas-ceasefire-by-august-15
+    - israel-x-hamas-ceasefire-by-january-31
+    - israel-x-hamas-ceasefire-by-july-15
+    # stem: israel-x-iran-ceasefire (1)
+    - israel-x-iran-ceasefire-before-july-15
+    # stem: jd-vance-diplomatic-meeting-with-iran-by (1)
+    - jd-vance-diplomatic-meeting-with-iran-by
+    # stem: khamenei-out-as-supreme-leader-of-iran (3)
+    - khamenei-out-as-supreme-leader-of-iran-by-friday
+    - khamenei-out-as-supreme-leader-of-iran-by-july-31
+    - khamenei-out-as-supreme-leader-of-iran-in-2024
+    # stem: military-action-against-iran-ends (1)
+    - military-action-against-iran-ends-on-127
+    # stem: military-action-against-iran-ends-by (1)
+    - military-action-against-iran-ends-by
+    # stem: military-action-against-iran-ends-on (1)
+    - military-action-against-iran-ends-on
+    # stem: mojtaba-khamenei-leaves-iran-by (1)
+    - mojtaba-khamenei-leaves-iran-by
+    # stem: next-country-us-strikes (5)
+    - next-country-us-strikes-391
+    - next-country-us-strikes-457
+    - next-country-us-strikes-632
+    - next-country-us-strikes-681
+    - next-country-us-strikes-785
+    # stem: next-round-of-us-iran-peace-talks-byptptpt (1)
+    - next-round-of-us-iran-peace-talks-byptptpt-20260623022722982
+    # stem: next-us-x-iran-diplomatic-meeting-on (1)
+    - next-us-x-iran-diplomatic-meeting-on
+    # stem: russia-strike (2)
+    - russia-strike-on-kyiv-municipality-on-138
+    - russia-strike-on-kyiv-municipality-on-252
+    # stem: russia-x-ukraine-any-diplomatic-meeting-byptptpt (1)
+    - russia-x-ukraine-any-diplomatic-meeting-byptptpt-20260629155934230
+    # stem: russia-x-ukraine-ceasefire (5)
+    - russia-x-ukraine-ceasefire-by-august-31
+    - russia-x-ukraine-ceasefire-by-february-28-2026
+    - russia-x-ukraine-ceasefire-by-next-friday-mar-21
+    - russia-x-ukraine-ceasefire-by-november-30-513
+    - russia-x-ukraine-ceasefire-by-october-31
+    # stem: trump-announces-us-x-iran-ceasefire-broken-by (1)
+    - trump-announces-us-x-iran-ceasefire-broken-by
+    # stem: trump-announces-us-x-iran-ceasefire-by (1)
+    - trump-announces-us-x-iran-ceasefire-by
+    # stem: trump-announces-us-x-iran-ceasefire-over-byptptpt (1)
+    - trump-announces-us-x-iran-ceasefire-over-byptptpt-20260607232555290
+    # stem: trump-strikes-another-drug-boat (1)
+    - trump-strikes-another-drug-boat-by-sep-30
+    # stem: us (2)
+    - us-next-strikes-iran-on
+    - us-next-strikes-iran-on-312
+    # stem: us-announces-blockade (1)
+    - us-announces-blockade-on-iran-byptptpt-20260622191049039
+    # stem: us-announces-halt (1)
+    - us-announces-halt-in-iran-offensive-operations-byptptpt-20260718015003096
+    # stem: us-announces-military-coordination-with-kurds (1)
+    - us-announces-military-coordination-with-kurds-in-iran-by-march-31
+    # stem: us-ceasefire-against-iran-continues-throughptptpt (1)
+    - us-ceasefire-against-iran-continues-throughptptpt
+    # stem: us-iran-60-day-negotiation-period-extended (1)
+    - us-iran-60-day-negotiation-period-extended-20260624044855448
+    # stem: us-iran-nuclear-deal (5)
+    - us-iran-nuclear-deal-before-2027
+    - us-iran-nuclear-deal-before-august
+    - us-iran-nuclear-deal-before-july
+    - us-iran-nuclear-deal-by-april-30
+    - us-iran-nuclear-deal-by-march-31
+    # stem: us-military-action-against-iran (5)
+    - us-military-action-against-iran-before-august
+    - us-military-action-against-iran-before-november
+    - us-military-action-against-iran-by-friday
+    - us-military-action-against-iran-by-sunday-225
+    - us-military-action-against-iran-in-april
+    # stem: us-strike (3)
+    - us-strike-on-somalia-by-february-7-553
+    - us-strike-on-somalia-by-january-31-338
+    - us-strike-on-somalia-by-january-31-563
+    # stem: us-x-iran-effective-ceasefire-begins-byptptpt-2-week-pause (1)
+    - us-x-iran-effective-ceasefire-begins-byptptpt-2-week-pause
+    # stem: us-x-iran-nuclear-deal (1)
+    - us-x-iran-nuclear-deal-in-2025
+    # stem: us-x-iran-nuclear-talks-resume (1)
+    - us-x-iran-nuclear-talks-resume-by-march-31
+    # stem: usisrael-strike (1)
+    - usisrael-strike-on-fordow-nuclear-facility-by-march-31
+    # stem: what-iranian-demands-will-trump-agree-to (1)
+    - what-iranian-demands-will-trump-agree-to-by-may-31
+    # stem: what-will-the-usisrael-target (1)
+    - what-will-the-usisrael-target-in-iran-by-march-31
+    # stem: when-will-the-us (1)
+    - when-will-the-us-next-strike-iran-week
+    # stem: where-will-the (3)
+    - where-will-the-next-next-round-of-us-iran-peace-talks-beptptpt-20260623023740663
+    - where-will-the-next-us-iran-diplomatic-meeting-happen-455
+    - where-will-the-next-us-iran-diplomatic-meeting-happen-811
+    # stem: where-will-the-us-iran-meet (1)
+    - where-will-the-us-iran-meet
+    # stem: which-cities-will-russia-enter (1)
+    - which-cities-will-russia-enter-by-june-30
+    # stem: which-countries-will-conduct-military-action-against-iran (1)
+    - which-countries-will-conduct-military-action-against-iran-by-april-30
+    # stem: which-countries-will-iran-strike (1)
+    - which-countries-will-iran-strike-in-march
+    # stem: which-countries-will-recognize-israel (1)
+    - which-countries-will-recognize-israel-by-june-30
+    # stem: which-countries-will-strike-iran (1)
+    - which-countries-will-strike-iran-by-march-31
+    # stem: who-will-attend-the (1)
+    - who-will-attend-the-next-us-x-iran-diplomatic-meeting
+    # stem: who-will-attend-us-iran-signing-ceremony (1)
+    - who-will-attend-us-iran-signing-ceremony-20260615232202457
+    # stem: who-will-be (1)
+    - who-will-be-next-supreme-leader-of-iran-515
+    # stem: who-will-meet-with-iran (1)
+    - who-will-meet-with-iran-by-april-30
+    # stem: who-will-sign-uptspt-x-iran-deal (1)
+    - who-will-sign-uptspt-x-iran-deal-20260612002238373
+    # stem: will-another-country-conduct-military-action-against-iran-by (1)
+    - will-another-country-conduct-military-action-against-iran-by
+    # stem: will-france-uk-or-germany-strike-iran (3)
+    - will-france-uk-or-germany-strike-iran-by-february-28
+    - will-france-uk-or-germany-strike-iran-by-january-31
+    - will-france-uk-or-germany-strike-iran-by-june-30-259
+    # stem: will-iran-close-the-strait-of-hormuz (1)
+    - will-iran-close-the-strait-of-hormuz-in-2025
+    # stem: will-iran-name-a-successor-to-khamenei-by (1)
+    - will-iran-name-a-successor-to-khamenei-by
+    # stem: will-iran-play (1)
+    - will-iran-play-in-the-world-cup
+    # stem: will-israel-strike-an-iranian-nuclear-facility (1)
+    - will-israel-strike-an-iranian-nuclear-facility-before-july
+    # stem: will-israel-strike-gaza (1)
+    - will-israel-strike-gaza-on-358
+    # stem: will-israel-strike-lebanon (1)
+    - will-israel-strike-lebanon-on-431
+    # stem: will-khamenei-leave-iran (1)
+    - will-khamenei-leave-iran-by-friday
+    # stem: will-russia-capture-all-of-huliaipole (1)
+    - will-russia-capture-all-of-huliaipole-by-february-28
+    # stem: will-russia-capture-rodynske (1)
+    - will-russia-capture-rodynske-by-september-15
+    # stem: will-russia-capture-territory (1)
+    - will-russia-capture-territory-in-dnipro-oblast-by
+    # stem: will-russia-enter-ternuvate-again (1)
+    - will-russia-enter-ternuvate-again-by-february-28
+    # stem: will-the-iranian-regime-fall (2)
+    - will-the-iranian-regime-fall-before-july
+    - will-the-iranian-regime-fall-by-september-30-20260629143335077
+    # stem: will-the-iranian-regime-survive-us-military-strikes (1)
+    - will-the-iranian-regime-survive-us-military-strikes-741
+    # stem: will-the-us-invade-iran (1)
+    - will-the-us-invade-iran-before-july
+    # stem: will-the-us-officially-declare-war (2)
+    - will-the-us-officially-declare-war-on-iran-before-august
+    - will-the-us-officially-declare-war-on-iran-in-2025
+    # stem: will-trump-declare-war (1)
+    - will-trump-declare-war-on-iran-by
+    # stem: will-trump-increase-sanctions (1)
+    - will-trump-increase-sanctions-on-russia-before-august
+    # stem: will-usd-reach-1pt7m-iranian-rials (1)
+    - will-usd-reach-1pt7m-iranian-rials-by-february-28

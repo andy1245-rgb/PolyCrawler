@@ -169,7 +169,14 @@ def test_lane2_clone_writes_identical_shape(wr, tmp_path, cfg, monkeypatch):
     assert rows[0]["account"] == "0xw"
     assert rows[0]["burstUsd"] == "12000.0"
     assert rows[0]["bestAsk"] == "0.6"   # same CLOB book as the lane-1 row
-    assert not (REPO / "data" / "live" / "signalsLane2.csv").exists()
+    # leak check: the live watcher may legitimately have created its own
+    # signalsLane2.csv by now — assert the test left any such file untouched
+    live = REPO / "data" / "live" / "signalsLane2.csv"
+    st0 = live.stat().st_mtime_ns if live.exists() else None
+    wr.alert("0xw", int(time.time()), "0xm", info, {"start": 1, "usd": 12000.0},
+             0.6, 0.0, 1, {"alerts": []}, None, "Yes")
+    st1 = live.stat().st_mtime_ns if live.exists() else None
+    assert st0 == st1
 
 
 def test_lane2_off_writes_nothing(wr, tmp_path, cfg):
