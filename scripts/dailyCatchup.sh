@@ -19,6 +19,7 @@ if [ "$(cat logs/lastDailyReport 2>/dev/null)" != "$TODAY" ]; then
     uv run python scripts/paperPnl.py >> logs/dailyReport.log 2>&1
     uv run python scripts/paperMarkToMarket.py >> logs/dailyReport.log 2>&1
     uv run python scripts/paperTrajectory.py >> logs/dailyReport.log 2>&1
+    uv run python scripts/paperLaneMarks.py >> logs/dailyReport.log 2>&1
     echo "$TODAY" > logs/lastDailyReport
     echo "$(date '+%F %T') daily report done" >> logs/dailyReport.log
 fi

@@ -1,0 +1,23 @@
+# Paper lanes beyond the lane-1 resolution book (rules + gates pre-registered in
+# research/paperLanes.md). This file absent, malformed, or a lane disabled =>
+# that lane's watcher/marks hooks are no-ops and lane-1 behavior is byte-identical.
+lane2:
+  # Horizon-exit book: lane-1's own alerts regraded at T+7d mark (+50bps sell slip).
+  # Zero incremental exposure — same trigger, same $100 copy, different close.
+  enabled: true
+  horizonsDays: [7]
+  sellSlippageBps: 50
+
+lane3:
+  # Favorite/mid burst book: >=$10k bursts at burst-average price 0.55-0.90 on any
+  # (liquid, fee-free) market; marks at T+3d and T+7d (T+7d decision-grade).
+  enabled: true
+  minUsd: 10000
+  priceMin: 0.55
+  priceMax: 0.90
+  horizonsDays: [3, 7]
+  sellSlippageBps: 50
+  maxAlertsPerDay: 3
+  skipFeeMarkets: true
+  tags: [politics, geopolitics, world, sports, crypto, economics, tech, culture, pop-culture, weather]
+  maxMarkets: 600

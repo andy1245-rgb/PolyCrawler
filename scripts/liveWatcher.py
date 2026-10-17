@@ -20,6 +20,12 @@ Tape (2026-10-09 redesign, research/ideasResearch.md #1):
 
 Output: console lines + data/live/signals.csv (one row per alert).
 
+Lanes (configs/paperLanes.yaml, research/paperLanes.md): additive paper lanes
+eat from the same tape. Lane 2 re-grades every alert below at the T+7d mark;
+lane 3 (favorite/mid bursts ≥$10k at 0.55–0.90 any market) is wired into the
+drain/poll below. With the config absent or a lane disabled, lane-1 behavior
+and every state key below are byte-identical to this file's semantics.
+
 Run:  uv run python scripts/liveWatcher.py [--once]
 """
 
@@ -33,6 +39,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
+
+import paperLanes as lanes
 
 gammaApi = "https://gamma-api.polymarket.com"
 dataApi = "https://data-api.polymarket.com"
@@ -48,6 +56,7 @@ COND_CHUNK = 20
 # Sizing: assume we can take up to this fraction above the best ask.
 SIZE_SLIP = 0.10
 clobApi = "https://clob.polymarket.com"
+LANES = None   # lane config carrier; loaded in main(), see paperLanes.py
 MILITARY = ("iran", "israel", "hezbollah", "houthi", "lebanon", "hamas", "gaza",
             "ukraine", "russia", "taiwan", "pakistan-military", "maduro", "venezuela", "nato",
             "syria", "yemen", "invade", "nuclear", "airspace", "blockade", "withdraw",
@@ -375,19 +384,27 @@ def alert(account: str, ts: int, mid: str, info: dict, burst: dict, avg: float,
         w.writerow([nowIso(), account, info.get("eventSlug"), info.get("question"), mid,
                     outcome, round(burst["usd"], 2), round(avg, 4), round(ageDays, 2), nMarkets,
                     book.get("bestAsk"), book.get("askSize"), book.get("takeableShares")])
+    if LANES and LANES["lane2"]["enabled"]:
+        lanes.onAlert1(ROOT, LANES, account, mid, info, burst, avg, ageDays,
+                       nMarkets, outcome, nowIso(), book)
 
 
 def main() -> None:
     from rtdsTape import RtdsTape
+    global LANES
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true",
                     help="one refresh + backfill cycle, drain the tape, exit")
     args = ap.parse_args()
+    LANES = lanes.loadConfig()
+    lanes.setConfig(LANES)
+    lanes.configure({"fillKey": fillKey, "bookSize": bookSize,
+                     "normalize": normalizeV2Trade})
     state = loadState()
     slugs = knownSlugs()
-    holder = {"markets": {}}          # read from the RTDS thread
+    holder = {"markets": {}, "lane3": {}}          # read from the RTDS thread
     rowQ: queue.Queue = queue.Queue()
-    tape = RtdsTape(lambda: set(holder["markets"].keys()),
+    tape = RtdsTape(lambda: set(holder["markets"].keys()) | set(holder["lane3"]),
                     lambda row, backfill: rowQ.put((row, backfill)))
     tape.start()
     with httpx.Client(timeout=httpx.Timeout(30.0), headers={"User-Agent": "polycrawler2"},
@@ -397,15 +414,22 @@ def main() -> None:
         while True:
             markets = refreshEvents(client, slugs)
             holder["markets"] = markets
+            if LANES["lane3"]["enabled"]:
+                holder["lane3"] = lanes.refreshLane3(client, LANES["lane3"])
             if time.time() - lastBackfill >= BACKFILL_SECS:
                 lastBackfill = time.time()
                 backfillFills(client, state, markets)
+                if LANES["lane3"]["enabled"]:
+                    lanes.pollLane3(client, state, holder["lane3"],
+                                    LANES["lane3"]["minUsd"])
             # drain the push tape
             while True:
                 try:
                     row, backfill = rowQ.get(timeout=1.0)
                 except queue.Empty:
                     break
+                if LANES["lane3"]["enabled"] and row["mid"] in holder["lane3"]:
+                    lanes.onTapeRow(row, backfill, holder["lane3"], state, client)
                 info = markets.get(row["mid"])
                 if (not info or row["side"] != "BUY"
                         or seenBefore(fillKey(row, row["mid"]))):
