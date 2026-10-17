@@ -94,5 +94,5 @@ post-news looks more like fast news-ride/momentum than misappropriation —
 consistent with the enforcement record describing *different* traders than
 the ones this rule copies.
 
-Signals CSV: `research/newsAnchorSignals.csv` (one row per shipped-cell signal,
+Signals CSV: `data/research/newsAnchorSignals.csv` (one row per shipped-cell signal,
 with isPreNews / firstNewsTs / anchor quality).

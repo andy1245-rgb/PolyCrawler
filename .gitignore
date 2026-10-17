@@ -39,6 +39,7 @@ agents.md
 *.db
 *.sqlite3
 /data/
+research/*.csv
 /.cacheOpsExtensionEntrySweep/
 /runs/
 /logs/

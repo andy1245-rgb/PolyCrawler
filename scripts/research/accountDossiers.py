@@ -6,7 +6,7 @@ from pathlib import Path
 
 import polars as pl
 
-labeled = {r["wallet"] for r in csv.DictReader(open("research/knownWallets.csv"))}
+labeled = {r["wallet"] for r in csv.DictReader(open("data/research/knownWallets.csv"))}
 sus = pl.read_parquet("data/suspicious.parquet").filter(pl.col("suspicious") & ~pl.col("account").is_in(list(labeled)))
 sample = sus.sample(20, seed=7)
 markets = pl.read_parquet("data/markets.parquet").select("marketId", "question", "winner", "resolvedAt", "eventSlug")

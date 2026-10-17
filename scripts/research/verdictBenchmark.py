@@ -19,10 +19,10 @@ import polars as pl
 ROOT = Path(__file__).resolve().parents[2]
 
 verdicts = {}
-for r in csv.DictReader(open(ROOT / "research/sampleVerdicts.csv")):
+for r in csv.DictReader(open(ROOT / "data/research/sampleVerdicts.csv")):
     verdicts[r["account"]] = r["verdict"]
 
-labeled = {r["wallet"] for r in csv.DictReader(open(ROOT / "research/knownWallets.csv"))}
+labeled = {r["wallet"] for r in csv.DictReader(open(ROOT / "data/research/knownWallets.csv"))}
 sus = pl.read_parquet(ROOT / "data/suspicious.parquet").filter(
     pl.col("suspicious") & ~pl.col("account").is_in(list(labeled))
 )
@@ -79,7 +79,7 @@ print(sample.select(cols).sort("verdict", "marketsTraded"))
 print("\n=== Universe sample (seed=8, non-military events) ===")
 
 uverd = {}
-for r in csv.DictReader(open(ROOT / "research/universeVerdicts.csv")):
+for r in csv.DictReader(open(ROOT / "data/research/universeVerdicts.csv")):
     uverd[r["account"]] = r["verdict"]
 
 usus = pl.read_parquet(ROOT / "data/universe/suspicious.parquet").filter(

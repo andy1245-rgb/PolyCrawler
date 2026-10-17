@@ -23,7 +23,7 @@ implemented but partial (commit 700c05b).
 | `data/` (insider cases) | Iran strike ladder + Venezuela: markets, fills, funding, clusters | fills ~120 MB |
 | `data/universe/` | 85 events, 3.9M buy entries (rolling backtest universe); 3647 candidate accounts → 89 suspicious at the latest run | fills.parquet + markets.parquet + suspicious.parquet |
 | `data/raw/` | cached activity, etherscan, events, relay, trades | |
-| `research/knownWallets.csv` | labeled insider wallets used for recall checks | 9 wallets |
+| `data/research/knownWallets.csv` | labeled insider wallets used for recall checks | 9 wallets |
 
 Latest universe discovery run (`logs/discoverUniverse.log`, Oct 8 13:19):
 3647 candidates after the winning-bet prefilter (avgBuyPrice ≤ 0.7), 89
@@ -78,7 +78,7 @@ C (late & informed), D (high past return), E (concentrated) vs baseline.
   −36%). Fresh ≥ $20k at ≤ 0.50: +1%.
 - Best events were Yoon's removal, Biden dropping out, ZachXBT/Axiom.
 
-### 3.5 Verdict benchmark of step-1 variants — `research/sampleVerdicts.csv` + `scripts/research/verdictBenchmark.py`
+### 3.5 Verdict benchmark of step-1 variants — `data/research/sampleVerdicts.csv` + `scripts/research/verdictBenchmark.py`
 
 The 20 manual verdicts are now machine-readable and the seed=7 sample is
 reproduced exactly by the script. Ground truth: 4 insiders (the co-trade
@@ -94,7 +94,7 @@ cluster), 4 likely insiders → 8 loose positives.
   gate; matches the fresh-big-bet copy result in §3.3.
 - Deep-longshot gating (`avgBuyPrice ≤ 0.20`) is anti-predictive here.
 
-### 3.6 Copy-time lead gate — `research/leadGate.md` + `research/universeVerdicts.csv`
+### 3.6 Copy-time lead gate — `research/leadGate.md` + `data/research/universeVerdicts.csv`
 
 Second 20-account verdict sample from the universe (seed=8), plus a copy-time
 lead gate test. Headlines:
@@ -134,7 +134,7 @@ events, validated with event-level resampling.
 ## 5. Next steps (in order)
 
 1. **Benchmark flag rules against the 20-account ground truth.** DONE for
-   both samples — `research/sampleVerdicts.csv`, `research/universeVerdicts.csv`,
+   both samples — `data/research/sampleVerdicts.csv`, `data/research/universeVerdicts.csv`,
    `scripts/research/verdictBenchmark.py` (results in §3.5, §3.6). Remaining:
    verdict a third sample once the military-category universe exists, so the
    precision benchmark covers the category where insiders actually cluster.

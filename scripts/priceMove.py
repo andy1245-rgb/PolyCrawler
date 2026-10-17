@@ -18,7 +18,7 @@ def main() -> None:
         columns=["marketId", "question", "winner", "resolvedAt", "outcomes"],
     )
     suspicious = pl.read_parquet(root / "data" / "suspicious.parquet")
-    labels = pl.read_csv(root / "research" / "knownWallets.csv")
+    labels = pl.read_csv(root / "data" / "research" / "knownWallets.csv")
     text = buildReport(fills, markets, suspicious, labels)
     out = root / "research" / "priceMove.md"
     out.write_text(text)

@@ -306,7 +306,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-network", action="store_true",
                     help="use only cached GDELT responses under data/raw/gdelt/")
-    ap.add_argument("--csv", default="research/newsAnchorSignals.csv")
+    ap.add_argument("--csv", default="data/research/newsAnchorSignals.csv")
     ap.add_argument("--md", default="research/newsAnchor.md")
     args = ap.parse_args()
 
@@ -433,7 +433,7 @@ def main() -> None:
         "",
         f"## Decision rule: {verdict}",
         "",
-        "Signals CSV: `research/newsAnchorSignals.csv` (one row per shipped-cell signal,",
+        "Signals CSV: `data/research/newsAnchorSignals.csv` (one row per shipped-cell signal,",
         "with isPreNews / firstNewsTs / anchor quality).",
         "",
     ]
