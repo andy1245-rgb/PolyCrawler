@@ -14,6 +14,7 @@ import json
 import sys
 import time
 import uuid
+from datetime import datetime, timezone
 
 SENTINEL = object()
 from pathlib import Path
@@ -179,6 +180,62 @@ def test_lane2_clone_writes_identical_shape(wr, tmp_path, cfg, monkeypatch):
     assert st0 == st1
 
 
+def test_legacy_signal_header_keeps_rows_aligned(tmp_path):
+    """A book written before writtenTs existed must never gain a wider row: the
+    writer fits the row to the header already on disk, and says so by returning
+    False, so the live book cannot be silently misaligned mid-schema-change."""
+    path = tmp_path / "data" / "live" / "signals.csv"
+    path.parent.mkdir(parents=True)
+    legacy = [f for f in pl.L2_FIELDNAMES if f != "writtenTs"]
+    path.write_text(",".join(legacy) + "\n")
+    row = ["v"] * len(pl.L2_FIELDNAMES)
+    assert pl.appendCsv(path, pl.L2_FIELDNAMES, row) is False
+    lines = list(csv.reader(path.open()))
+    assert lines[0] == legacy
+    assert len(lines[1]) == len(legacy)
+    fresh = tmp_path / "signalsNew.csv"
+    assert pl.appendCsv(fresh, pl.L2_FIELDNAMES, row) is True
+    assert next(csv.reader(fresh.open())) == pl.L2_FIELDNAMES
+    # a header carrying a column this writer does not know also stays aligned
+    wider = tmp_path / "signalsWider.csv"
+    wider.write_text(",".join(pl.L2_FIELDNAMES + ["surprise"]) + "\n")
+    assert pl.appendCsv(wider, pl.L2_FIELDNAMES, row) is False
+    lines = list(csv.reader(wider.open()))
+    assert len(lines[1]) == len(pl.L2_FIELDNAMES) + 1
+    assert lines[1][-1] == ""
+    # an empty file is not a legacy book: it gets the full header
+    blank = tmp_path / "signalsBlank.csv"
+    blank.write_text("")
+    assert pl.appendCsv(blank, pl.L2_FIELDNAMES, row) is True
+    assert len(list(csv.reader(blank.open()))) == 2
+
+
+def test_replayed_alert_keeps_its_event_time(wr, tmp_path, cfg, monkeypatch):
+    """The 61-of-71 regression. A burst replayed weeks late must carry the time it
+    happened, not the time it was written; writtenTs is what makes the lateness
+    visible instead of the row wearing today's date."""
+    pl.setConfig(cfg)
+    wr.LANES = cfg
+    wr.SIGNALS = tmp_path / "signals.csv"
+    wr.ROOT = tmp_path
+    info = {"eventSlug": "e-slug", "question": "Q?", "tokens": {"Yes": "tok1"}}
+    monkeypatch.setattr(wr, "bookSize",
+                        lambda *a, **k: {"bestAsk": 0.6, "askSize": 400.0,
+                                         "takeableShares": 600.0})
+    event = datetime(2026, 10, 28, 10, 37, 13, tzinfo=timezone.utc)
+    wr.alert("0xw", int(event.timestamp()), "0xm", info,
+             {"start": int(event.timestamp()) - 120, "usd": 12000.0},
+             0.6, 1.0, 1, {"alerts": []}, None, "Yes")
+    row = readCsv(tmp_path / "signals.csv")[0]
+    assert row["alertTs"] == "2026-10-28 10:37:13"
+    written = datetime.strptime(row["writtenTs"], "%Y-%m-%d %H:%M:%S")
+    assert (written - event.replace(tzinfo=None)).total_seconds() > 3600
+    lane2 = readCsv(tmp_path / "data" / "live" / "signalsLane2.csv")[0]
+    assert lane2["alertTs"] == row["alertTs"]
+    assert lane2["writtenTs"] == row["writtenTs"]
+    assert len(row) == len(pl.L2_FIELDNAMES)
+
+
 def test_lane2_off_writes_nothing(wr, tmp_path, cfg):
     off = {**cfg, "lane2": {**cfg["lane2"], "enabled": False}}
     pl.setConfig(off)
@@ -340,3 +397,48 @@ def test_lane3_cache_serves_without_network(tmp_path, cfg):
                                      "markets": {"0xm": market}}))
     out = pl.refreshLane3(Boom(), cfg["lane3"], root=tmp_path)
     assert out == {"0xm": market}
+
+
+def test_blank_first_line_is_not_a_legacy_book(tmp_path):
+    """A half-written file must heal. An empty header row is not an older schema,
+    so the first append writes a real header instead of a blank line forever."""
+    path = tmp_path / "blank.csv"
+    path.write_text("\n")
+    assert pl.readHeader(path) is None
+    row = [f"c{i}" for i in range(len(pl.L2_FIELDNAMES))]
+    assert pl.appendCsv(path, pl.L2_FIELDNAMES, row) is True
+    lines = [line for line in path.read_text().splitlines() if line.strip()]
+    assert lines[0].split(",") == pl.L2_FIELDNAMES
+    assert len(lines[1].split(",")) == len(pl.L2_FIELDNAMES)
+
+
+def test_undecodable_book_does_not_raise(tmp_path):
+    """The watcher calls appendCsv on every alert, and nothing upstream catches,
+    so a book in another encoding must not be able to kill the process."""
+    path = tmp_path / "latin.csv"
+    path.write_bytes(b"alertTs,caf\xe9\n2026-10-01 12:00:00,x\n")
+    assert pl.readHeader(path) is None
+    row = [f"c{i}" for i in range(len(pl.L2_FIELDNAMES))]
+    pl.appendCsv(path, pl.L2_FIELDNAMES, row)
+    assert path.stat().st_size > 0
+
+
+def test_short_row_cannot_misalign_a_current_book(tmp_path):
+    path = tmp_path / "short.csv"
+    assert pl.appendCsv(path, pl.L2_FIELDNAMES, ["only", "two"]) is True
+    lines = list(csv.reader(path.open()))
+    assert len(lines[0]) == len(lines[1]) == len(pl.L2_FIELDNAMES)
+    assert lines[1][:2] == ["only", "two"]
+    assert lines[1][2:] == [""] * (len(pl.L2_FIELDNAMES) - 2)
+
+
+def test_row_maps_by_name_not_by_position(tmp_path):
+    """A book whose columns are in a different order must get each value under its
+    own name. A positional fit would put the wrong number in every cell."""
+    path = tmp_path / "reordered.csv"
+    path.write_text("takeableShares,alertTs\n")
+    row = [f"c{i}" for i in range(len(pl.L2_FIELDNAMES))]
+    assert pl.appendCsv(path, pl.L2_FIELDNAMES, row) is False
+    cells = list(csv.reader(path.open()))[1]
+    byName = dict(zip(pl.L2_FIELDNAMES, row))
+    assert cells == [byName["takeableShares"], byName["alertTs"]]

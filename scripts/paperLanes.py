@@ -51,10 +51,11 @@ AGE_STAMP_DAYS = 5
 
 ROOT = Path(__file__).resolve().parents[1]
 
-L2_FIELDNAMES = ["alertTs", "account", "eventSlug", "question", "marketId",
-                 "outcome", "burstUsd", "avgPrice", "ageDays", "marketsSeen",
-                 "bestAsk", "askSize", "takeableShares"]
-L3_FIELDNAMES = L2_FIELDNAMES + ["ageStamp", "freshWindow5d"]
+_ALERT_FIELDS = ["alertTs", "account", "eventSlug", "question", "marketId",
+                  "outcome", "burstUsd", "avgPrice", "ageDays", "marketsSeen",
+                  "bestAsk", "askSize", "takeableShares"]
+L2_FIELDNAMES = _ALERT_FIELDS + ["writtenTs"]
+L3_FIELDNAMES = _ALERT_FIELDS + ["ageStamp", "freshWindow5d", "writtenTs"]
 
 # helpers supplied by liveWatcher (fillKey / bookSize / normalizeV2Trade) so the
 # lane engine reuses the watcher's functions instead of forking them.
@@ -129,27 +130,80 @@ def bank(state: dict) -> dict:
                                       "daily": {}})
 
 
-def appendRow(root: Path, name: str, fieldnames: list[str], row: list) -> None:
-    path = root / "data" / "live" / name
+def readHeader(path: Path) -> list[str] | None:
+    """The header already on disk, or None when there is not one yet.
+
+    A blank first line is treated as no header, so a half-written file heals
+    instead of being mistaken for a book on an older schema. ValueError covers
+    UnicodeDecodeError: a book in another encoding must not kill the watcher.
+    """
+    if not path.exists():
+        return None
+    try:
+        with path.open(newline="") as fh:
+            header = next(csv.reader(fh), None)
+    except (OSError, csv.Error, ValueError):
+        return None
+    return header or None
+
+
+WARNED_SCHEMA: set[str] = set()
+
+
+def warnSchemaOnce(path: Path, header: list[str], fieldnames: list[str]) -> None:
+    missing = [name for name in fieldnames if name not in header]
+    extra = [name for name in header if name not in fieldnames]
+    why = (f"predates {','.join(missing)}" if missing
+           else f"carries columns this writer does not know ({','.join(extra)})")
+    key = f"{path}|{','.join(missing)}|{','.join(extra)}"
+    if key in WARNED_SCHEMA:
+        return
+    WARNED_SCHEMA.add(key)
+    print(f"[{nowIso()}] {path.name} {why}; rows stay in its "
+          f"{len(header)}-column shape until the book is rebuilt", flush=True)
+
+
+def appendCsv(path: Path, fieldnames: list[str], row: list) -> bool:
+    """Append one row, fitted to the header already on disk.
+
+    Returns True when the file is on the current schema. A book written before a
+    column existed is written back in its own column order rather than gaining a
+    wider row: a live book that is half one shape and half another misreads silently,
+    which is worse than being a column behind.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    new = not path.exists()
+    header = readHeader(path)
+    byName = dict(zip(fieldnames, row))
+    if header is None:
+        with path.open("a", newline="") as fh:
+            writer = csv.writer(fh)
+            writer.writerow(fieldnames)
+            writer.writerow([byName.get(name, "") for name in fieldnames])
+        return True
+    if header == fieldnames:
+        with path.open("a", newline="") as fh:
+            csv.writer(fh).writerow([byName.get(name, "") for name in fieldnames])
+        return True
+    warnSchemaOnce(path, header, fieldnames)
     with path.open("a", newline="") as fh:
-        w = csv.writer(fh)
-        if new:
-            w.writerow(fieldnames)
-        w.writerow(row)
+        csv.writer(fh).writerow([byName.get(name, "") for name in header])
+    return False
+
+
+def appendRow(root: Path, name: str, fieldnames: list[str], row: list) -> bool:
+    return appendCsv(root / "data" / "live" / name, fieldnames, row)
 
 
 # --- lane-2: horizon re-grade of lane-1's own alerts ---------------------------
 
 def onAlert1(root: Path, cfg: dict, account: str, mid: str, info: dict,
              burst: dict, avg: float, ageDays: float, nMarkets: int,
-             outcome: str, when: str, book: dict) -> None:
+             outcome: str, eventTs: str, writtenTs: str, book: dict) -> None:
     appendRow(root, "signalsLane2.csv", L2_FIELDNAMES, [
-        when, account, info.get("eventSlug"), info.get("question"), mid,
+        eventTs, account, info.get("eventSlug"), info.get("question"), mid,
         outcome, round(burst["usd"], 2), round(avg, 4), round(ageDays, 2),
         nMarkets, book.get("bestAsk"), book.get("askSize"),
-        book.get("takeableShares")])
+        book.get("takeableShares"), writtenTs])
 
 
 # --- lane-3 fill dedup (lane-local store; see module docstring) ----------------
@@ -332,11 +386,13 @@ def alert3(account: str, ts: int, mid: str, info: dict, burst: dict, avg: float,
             f"ask {book.get('bestAsk')} x{book.get('askSize')} takeable {book.get('takeableShares')}")
     print(line, flush=True)
     appendRow(root or ROOT, "signalsLane3.csv", L3_FIELDNAMES, [
-        nowIso(), account, info.get("eventSlug"), info.get("question"), mid,
+        datetime.fromtimestamp(ts, tz=UTC).strftime("%Y-%m-%d %H:%M:%S"), account,
+        info.get("eventSlug"), info.get("question"), mid,
         outcome, round(burst["usd"], 2), round(avg, 4), round(ageDays, 2),
         len(acct["markets"]), book.get("bestAsk"), book.get("askSize"),
         book.get("takeableShares"), acct.get("ageStamp", "unverified"),
-        acct.get("freshWindow5d") if acct.get("freshWindow5d") is not None else "?"])
+        acct.get("freshWindow5d") if acct.get("freshWindow5d") is not None else "?",
+        nowIso()])
 
 
 # --- lane-3 gap-rescue poll (mirrors liveWatcher.backfillFills, see docstring) --

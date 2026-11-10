@@ -30,7 +30,6 @@ Run:  uv run python scripts/liveWatcher.py [--once]
 """
 
 import argparse
-import csv
 import json
 import queue
 import time
@@ -67,6 +66,9 @@ LIVE = ROOT / "data" / "live"
 STATE = LIVE / "state.json"
 EVENTS_CACHE = LIVE / "events.json"
 SIGNALS = LIVE / "signals.csv"
+SIGNAL_FIELDNAMES = ["alertTs", "account", "eventSlug", "question", "marketId",
+                     "outcome", "burstUsd", "avgPrice", "ageDays", "marketsSeen",
+                     "bestAsk", "askSize", "takeableShares", "writtenTs"]
 
 
 def nowIso() -> str:
@@ -368,25 +370,20 @@ def alert(account: str, ts: int, mid: str, info: dict, burst: dict, avg: float,
     state["alerts"] = seen[-2000:]
     book = bookSize(client, info, outcome, avg)
     when = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%m-%d %H:%M")
+    eventTs = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    written = nowIso()
     line = (f"*** SIGNAL {when} {account} {info.get('eventSlug')} | "
             f"{info.get('question')} | ${burst['usd']:,.0f} @ {avg:.3f} | "
             f"age {ageDays:.1f}d {nMarkets} mkts | "
             f"ask {book.get('bestAsk')} x{book.get('askSize')} takeable {book.get('takeableShares')}")
     print(line, flush=True)
-    SIGNALS.parent.mkdir(parents=True, exist_ok=True)
-    new = not SIGNALS.exists()
-    with SIGNALS.open("a", newline="") as fh:
-        w = csv.writer(fh)
-        if new:
-            w.writerow(["alertTs", "account", "eventSlug", "question", "marketId",
-                        "outcome", "burstUsd", "avgPrice", "ageDays", "marketsSeen",
-                        "bestAsk", "askSize", "takeableShares"])
-        w.writerow([nowIso(), account, info.get("eventSlug"), info.get("question"), mid,
-                    outcome, round(burst["usd"], 2), round(avg, 4), round(ageDays, 2), nMarkets,
-                    book.get("bestAsk"), book.get("askSize"), book.get("takeableShares")])
+    lanes.appendCsv(SIGNALS, SIGNAL_FIELDNAMES, [
+        eventTs, account, info.get("eventSlug"), info.get("question"), mid,
+        outcome, round(burst["usd"], 2), round(avg, 4), round(ageDays, 2), nMarkets,
+        book.get("bestAsk"), book.get("askSize"), book.get("takeableShares"), written])
     if LANES and LANES["lane2"]["enabled"]:
         lanes.onAlert1(ROOT, LANES, account, mid, info, burst, avg, ageDays,
-                       nMarkets, outcome, nowIso(), book)
+                       nMarkets, outcome, eventTs, written, book)
 
 
 def main() -> None:
