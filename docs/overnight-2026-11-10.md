@@ -157,14 +157,27 @@ right that one dict was mixing three units. `formatSummary` formatting was fixed
 
 ## 7. Verification
 
-`uv run pytest -q` → **1 failed, 211 passed**. Before this branch it was 1 failed, 195 passed, so
-16 tests were added and all 16 pass.
+Both spellings give the same result:
 
-The single failure is unchanged and unrelated:
-`test_order_burst_onchain.py::test_sample_days_deterministic_and_sorted`, `assert 70 == 34 * 2`, a
-hardcoded month count that the calendar has overtaken (`orderBurstOnchain.py:486` loops to the
-current month, so in Nov 2026 it covers 35). It failed before this branch existed: the suite was
-1 failed / 195 passed on the same tree before any edit, and that test file has no diff here.
+```
+.venv/bin/python -m pytest -q   ->  212 passed
+uv run pytest -q                ->  212 passed
+```
+
+Before this branch the tree was 1 failed, 195 passed. 16 tests were added and the one
+pre-existing failure was repaired, so the suite is now green: 196 tests existed before, 212 exist
+now.
+
+The failure was `test_order_burst_onchain.py::test_sample_days_deterministic_and_sorted`, which
+asserted `len(days) == 34 * 2` against a comment dating the range "Jan 2024 .. Oct 2026".
+`sampleDays` walks from its start month to the current month, so the count advances every month and
+the literal went stale: in Nov 2026 the walk covers 35 months and returns 70. The expected count is
+now derived from the span the sampler actually walks, using a closed-form `monthSpan` rather than a
+copy of the loop so an off-by-one inside `sampleDays` cannot mirror itself in the expectation, and
+the clock is sampled either side of the call so a month boundary mid-test cannot flake it. That
+test's `d.year <= 2026` bound, which would have rotted the same way in January, is replaced by
+asserting the walk starts at the given month and ends at the current one. It is not this branch's
+bug and it is not this branch's code, but it blocked a green suite.
 
 New tests, and each one is checked to fail when the fix it guards is reverted:
 
@@ -189,9 +202,11 @@ New tests, and each one is checked to fail when the fix it guards is reverted:
 
 Mutation-checked rather than assumed: commenting out each of the three `noPrice` increments fails
 three tests; reverting `entryTs` to `parseAlertTs(row["alertTs"])` fails the horizon test; removing
-the `ValueError` catch, the `or None` on the header, or the by-name fit each fails its own test.
-The pre-existing `test_lane2_clone_writes_identical_shape`, which pins the lane-1 header to
-`L2_FIELDNAMES`, still passes, so the two writers cannot drift.
+the `ValueError` catch, the `or None` on the header, or the by-name fit each fails its own test;
+and making `sampleDays` stop a month early or take one sample instead of `perMonth` fails the span
+test, so the derived count is not vacuous. The pre-existing
+`test_lane2_clone_writes_identical_shape`, which pins the lane-1 header to `L2_FIELDNAMES`, still
+passes, so the two writers cannot drift.
 
 Also verified by hand against copies of the three real headers: signals 13 columns, lane2 13, lane3
 15, every row aligned, `data/live` untouched.
