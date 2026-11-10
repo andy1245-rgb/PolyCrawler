@@ -7,6 +7,7 @@ import pytest
 from polycrawler.backtest import (
     BacktestParams,
     dirsFromConfig,
+    formatSummary,
     loadMarketFills,
     paramsHash,
     rollingWindows,
@@ -189,6 +190,36 @@ def test_unresolvedPositionIsMarked() -> None:
     assert trade["pnl"] == pytest.approx(3)
     assert result.summary["markedCount"] == 1
     assert result.summary["totalPnl"] == pytest.approx(3)
+
+
+def test_noPriceSkipIsCountedAndCoverageReported() -> None:
+    """A copy with no tape print inside the price window is a reported skip, not a
+    silent drop. delaySec pushes the decision 30000s past the only print, so the
+    6h staleness window cannot answer it."""
+    markets = marketsFrame([oneMarket("m", "event", "Yes", ts(10**6))])
+    fills = pl.DataFrame([buy("0xa", "m", 10, 0.40, 0)])
+    result = runBacktest(fills, markets, ["0xa"], params(delaySec=30000), ts(0), ts(10**6))
+    assert result.trades.height == 0
+    assert result.summary["noPriceSkips"] == {"entryAttempts": 1, "exitAttempts": 0, "markLots": 0}
+    assert result.summary["entryCoverage"] == pytest.approx(0.0)
+    assert "entryCoverage" in formatSummary(result)
+
+
+def test_entryCoverageIsCompleteWhenEveryCopyIsPriced() -> None:
+    markets = marketsFrame([oneMarket("m", "event", "Yes", ts(10**6))])
+    fills = pl.DataFrame([buy("0xa", "m", 10, 0.40, 0)])
+    result = runBacktest(fills, markets, ["0xa"], params(delaySec=0), ts(0), ts(10**6))
+    assert result.trades.height == 1
+    assert result.summary["noPriceSkips"] == {"entryAttempts": 0, "exitAttempts": 0, "markLots": 0}
+    assert result.summary["entryCoverage"] == pytest.approx(1.0)
+
+
+def test_noPriceCountersSurviveAnEmptyRun() -> None:
+    markets = marketsFrame([oneMarket("m", "event", "Yes", ts(10**6))])
+    result = runBacktest(pl.DataFrame([buy("0xa", "m", 10, 0.40, 0)]).head(0), markets, [],
+                         params(), ts(0), ts(10**6))
+    assert result.summary["noPriceSkips"] == {"entryAttempts": 0, "exitAttempts": 0, "markLots": 0}
+    assert result.summary["entryCoverage"] is None
 
 
 def test_exposureCapScalesTheNextTrade() -> None:
@@ -458,3 +489,57 @@ def test_dirsFromConfigPrecedence(tmp_path) -> None:
 
     bare = dirsFromConfig(tmp_path, None, type("L", (), {"fetch": Bare()})())
     assert bare == [tmp_path / "data"]
+
+
+def test_unpricedExitIsCountedAndTheLotSurvives() -> None:
+    """Deleting the counter in _maybeExit must fail a test, so this calls it
+    directly: an armed key whose exit cannot be priced is a counted miss, not a
+    silent one, and the position stays open."""
+    from polycrawler.backtest import Book, Lot, _maybeExit
+
+    key = ("g", "m", "Yes")
+    book = Book()
+    book.openLots[key] = [Lot(tradeId=1, accountGroup="g", account="0xa", marketId="m",
+                              eventSlug="e", question="q", outcome="Yes", entryTs=ts(0),
+                              decisionTs=ts(0), theirPrice=0.4, theirUsd=4.0,
+                              entryPrice=0.4, shares=10.0, usd=4.0)]
+    book.armed.add(key)
+    book.net[key] = 1.0
+    book.lastPrice[key] = 0.4
+    _maybeExit(book, key, ts(0), None, params(minNetUsd=50, exitMode="followCluster"))
+    assert book.noPrice["exitAttempts"] == 1
+    assert book.closed == []
+    assert key in book.openLots
+
+
+def test_unarmedKeyStillCannotExit() -> None:
+    from polycrawler.backtest import Book, Lot, _maybeExit
+
+    key = ("g", "m", "Yes")
+    book = Book()
+    book.openLots[key] = [Lot(tradeId=1, accountGroup="g", account="0xa", marketId="m",
+                              eventSlug="e", question="q", outcome="Yes", entryTs=ts(0),
+                              decisionTs=ts(0), theirPrice=0.4, theirUsd=4.0,
+                              entryPrice=0.4, shares=10.0, usd=4.0)]
+    book.net[key] = 0.0
+    book.lastPrice[key] = 0.4
+    _maybeExit(book, key, ts(0), 0.5, params(minNetUsd=50, exitMode="followCluster"))
+    assert book.closed == []
+    assert book.noPrice["exitAttempts"] == 0
+
+
+def test_markWithoutAPriceIsCounted() -> None:
+    """An empty tape prices nothing, so every open lot is a counted mark miss."""
+    from polycrawler.backtest import Book, Lot, _markOpen
+
+    key = ("g", "m", "Yes")
+    book = Book()
+    book.openLots[key] = [Lot(tradeId=1, accountGroup="g", account="0xa", marketId="m",
+                              eventSlug="e", question="q", outcome="Yes", entryTs=ts(0),
+                              decisionTs=ts(0), theirPrice=0.4, theirUsd=4.0,
+                              entryPrice=0.4, shares=10.0, usd=4.0)]
+    empty = pl.DataFrame(schema={"marketId": pl.String, "outcome": pl.String,
+                                 "ts": pl.Datetime("us", "UTC"), "price": pl.Float64})
+    _markOpen(book, empty, ts(1000))
+    assert book.noPrice["markLots"] == 1
+    assert book.closed[0].marked is True

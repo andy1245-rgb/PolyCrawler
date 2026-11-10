@@ -104,6 +104,15 @@ class Lot:
         return self.shares * (self.exitPrice - self.entryPrice)
 
 
+def noPriceCounts() -> dict[str, int]:
+    """Copies a missing price changed: counted, not silently dropped.
+
+    Units differ and the names say so: `entryAttempts` and `exitAttempts` count
+    fill rows that wanted a price, `markLots` counts positions marked without one.
+    """
+    return {"entryAttempts": 0, "exitAttempts": 0, "markLots": 0}
+
+
 @dataclass
 class Book:
     memory: BookMemory = field(default_factory=BookMemory)
@@ -115,6 +124,7 @@ class Book:
     closed: list[Lot] = field(default_factory=list)
     nextId: int = 0
     bursts: dict = field(default_factory=dict)
+    noPrice: dict[str, int] = field(default_factory=noPriceCounts)
 
 
 @dataclass
@@ -297,6 +307,8 @@ def _blankSummary(startTs: datetime, endTs: datetime, digest: str) -> dict:
         "medianEventReturn": None,
         "eventCount": 0,
         "markedCount": 0,
+        "noPriceSkips": noPriceCounts(),
+        "entryCoverage": None,
         "startTs": startTs.isoformat(),
         "endTs": endTs.isoformat(),
         "paramsHash": digest,
@@ -343,7 +355,10 @@ def _maybeExit(
     if worth >= params.minNetUsd:
         book.armed.add(key)
         return
-    if key not in book.armed or exitPrice is None:
+    if key not in book.armed:
+        return
+    if exitPrice is None:
+        book.noPrice["exitAttempts"] += 1
         return
     exitTs = fillTs + timedelta(seconds=int(params.delaySec))
     _closeKey(book, key, exitTs, exitPrice, "followCluster", False)
@@ -416,8 +431,11 @@ def _onBuy(book: Book, row: dict, ourPrice: float | None, params, endTs: datetim
     if decisionTs > endTs:
         return
     held = sum(lot.usd for lot in book.openLots.get(key, ()))
+    if ourPrice is None:
+        book.noPrice["entryAttempts"] += 1
+        return
     shares = orderShares(theirShares, ourPrice, params, book.exposure, positionUsd=held)
-    if shares <= 0 or ourPrice is None:
+    if shares <= 0:
         return
     if action == "trigger":
         theirPrice = burst.usd / burst.shares
@@ -485,6 +503,8 @@ def _markOpen(book: Book, tape: pl.DataFrame, endTs: datetime) -> None:
     for lot in stillOpen:
         lot.exitTs = endTs
         lot.exitPrice = prices.get(lot.tradeId)
+        if lot.exitPrice is None:
+            book.noPrice["markLots"] += 1
         lot.exitReason = "mark"
         lot.marked = True
         book.closed.append(lot)
@@ -511,7 +531,7 @@ def _fillPrices(
 
 def _replay(
     prepared: Prepared, params: BacktestParams, priceCache: dict | None = None
-) -> list[Lot]:
+) -> tuple[list[Lot], dict[str, int]]:
     book = Book()
     buyPrices, exitPrices = _fillPrices(prepared, params, priceCache)
     events: list[tuple] = []
@@ -540,7 +560,7 @@ def _replay(
         else:
             _resolveMarket(book, row["marketId"], row["winner"], row["resolvedAt"])
     _markOpen(book, prepared.tape, prepared.endTs)
-    return book.closed
+    return book.closed, dict(book.noPrice)
 
 
 def _median(values: list[float]) -> float | None:
@@ -569,9 +589,21 @@ def _maxDrawdown(lots: Sequence[Lot]) -> float:
     return worst
 
 
-def _summarize(lots: Sequence[Lot], startTs: datetime, endTs: datetime, digest: str) -> dict:
+def _summarize(
+    lots: Sequence[Lot],
+    startTs: datetime,
+    endTs: datetime,
+    digest: str,
+    noPrice: dict[str, int] | None = None,
+) -> dict:
     summary = _blankSummary(startTs, endTs, digest)
+    skips = noPriceCounts()
+    if noPrice:
+        for name in skips:
+            skips[name] = int(noPrice.get(name, 0))
+    summary["noPriceSkips"] = skips
     if not lots:
+        _setCoverage(summary, skips)
         return summary
     ordered = sorted(lots, key=lambda lot: lot.tradeId)
     realized = [lot for lot in ordered if lot.pnl is not None]
@@ -619,7 +651,14 @@ def _summarize(lots: Sequence[Lot], startTs: datetime, endTs: datetime, digest: 
             "markedCount": sum(1 for lot in ordered if lot.marked),
         }
     )
+    _setCoverage(summary, skips)
     return summary
+
+
+def _setCoverage(summary: dict, skips: dict[str, int]) -> None:
+    """Share of copy attempts that found a price. None when nothing was attempted."""
+    attempted = summary["tradeCount"] + skips["entryAttempts"]
+    summary["entryCoverage"] = None if attempted == 0 else summary["tradeCount"] / attempted
 
 
 def _tradesFrame(lots: Sequence[Lot]) -> pl.DataFrame:
@@ -658,12 +697,12 @@ def runPrepared(
     priceCache: dict | None = None,
 ) -> BacktestResult:
     digest = paramsHash(params)
-    lots = _replay(prepared, params, priceCache)
+    lots, noPrice = _replay(prepared, params, priceCache)
     return BacktestResult(
         params=params,
         paramsHash=digest,
         trades=_tradesFrame(lots),
-        summary=_summarize(lots, prepared.startTs, prepared.endTs, digest),
+        summary=_summarize(lots, prepared.startTs, prepared.endTs, digest, noPrice),
     )
 
 
@@ -704,6 +743,10 @@ def formatSummary(result: BacktestResult) -> str:
     lines = [
         f"run {result.paramsHash}",
         f"trades {summary['tradeCount']}  marked {summary['markedCount']}",
+        (
+            f"noPriceSkips {summary['noPriceSkips']}  "
+            f"entryCoverage {cov if (cov := summary['entryCoverage']) is None else f'{cov:.4f}'}"
+        ),
         f"totalPnl {summary['totalPnl']:.2f}",
         f"capitalDeployed {summary['capitalDeployed']:.2f}",
         f"returnOnDeployed {ret if ret is None else f'{ret:.4f}'}",
@@ -844,7 +887,13 @@ def runRolling(
     else:
         overallStart = datetime(startDate.year, startDate.month, startDate.day, tzinfo=timezone.utc)
         overallEnd = datetime(endDate.year, endDate.month, endDate.day, tzinfo=timezone.utc)
-    summary = _summarize(_lotsFromTrades(combined), overallStart, overallEnd, paramsHash(params))
+    skips = noPriceCounts()
+    for run in windowRuns:
+        for name in skips:
+            skips[name] += int((run.summary.get("noPriceSkips") or {}).get(name, 0))
+    summary = _summarize(
+        _lotsFromTrades(combined), overallStart, overallEnd, paramsHash(params), skips
+    )
     return RollingResult(windows=windowRuns, summary=summary, trades=combined)
 
 
