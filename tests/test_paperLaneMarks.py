@@ -207,3 +207,41 @@ def test_gate_report_reads_closes_only(tmpTree, capsys):
     plm.run(FakeClient())
     out = capsys.readouterr().out
     assert "lane2 T+7d: n=1 mean=" in out
+
+
+def test_horizon_runs_from_detection_not_from_the_event(tmpTree):
+    """The 61-of-62 replay, second half. A burst that happened 10 days ago but was
+    only detected now must not close its T+7d horizon on the first pass at today's
+    price: T+0 of a paper position is the moment it could have been copied, which is
+    writtenTs. Anchoring on the event time would feed a detection-day price into the
+    pre-registered T+7d gate."""
+    now = datetime.now(tz=UTC)
+    event = (now - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+    detected = now.strftime("%Y-%m-%d %H:%M:%S")
+    fields = SIG2_FIELDS + ["writtenTs"]
+    row = {**signalRow(alertTs=event), "writtenTs": detected}
+    with (tmpTree / LIVE / "signalsLane2.csv").open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=fields)
+        w.writeheader()
+        w.writerow(row)
+    writeSignals(tmpTree, "signalsLane3.csv", [])
+    plm.fetchMarket = lambda client, mid_: gammaMarket(prices=["0.80", "0.20"])
+    plm.run(FakeClient())
+    assert readCsv(tmpTree / LIVE / "laneCloses.csv") == []
+
+
+def test_horizon_closes_once_detection_is_old_enough(tmpTree):
+    now = datetime.now(tz=UTC)
+    event = (now - timedelta(days=40)).strftime("%Y-%m-%d %H:%M:%S")
+    detected = (now - timedelta(days=10)).strftime("%Y-%m-%d %H:%M:%S")
+    fields = SIG2_FIELDS + ["writtenTs"]
+    row = {**signalRow(alertTs=event), "writtenTs": detected}
+    with (tmpTree / LIVE / "signalsLane2.csv").open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=fields)
+        w.writeheader()
+        w.writerow(row)
+    writeSignals(tmpTree, "signalsLane3.csv", [])
+    plm.fetchMarket = lambda client, mid_: gammaMarket(prices=["0.80", "0.20"])
+    plm.run(FakeClient())
+    closes = readCsv(tmpTree / LIVE / "laneCloses.csv")
+    assert [c["horizon"] for c in closes if c["lane"] == "lane2"] == ["7"]

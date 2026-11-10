@@ -74,6 +74,16 @@ def gateStatus(firstAlertTs: str | None, closedCount: int) -> str:
     )
 
 
+def signalKey(row: dict) -> tuple[str, str, str]:
+    """Alert identity, keyed the way every other book keys it.
+
+    alertTs alone collides: 59 of the first 72 alerts shared a second with
+    another alert, so a single-field key silently drops most of the book.
+    """
+    return (row.get("alertTs") or "", row.get("account") or "",
+            row.get("eventSlug") or "")
+
+
 def main() -> None:
     if not SIGNALS.exists():
         print("no signals yet")
@@ -82,12 +92,12 @@ def main() -> None:
     if PNL.exists():
         with PNL.open() as fh:
             for row in csv.DictReader(fh):
-                done.add(row["alertTs"])
+                done.add(signalKey(row))
     openRows = []
     allRows = list(csv.DictReader(SIGNALS.open()))
     with httpx.Client(timeout=30.0, headers={"User-Agent": "polycrawler2"}) as client:
         for row in allRows:
-            if row["alertTs"] in done:
+            if signalKey(row) in done:
                 continue
             entry = float(row["bestAsk"] or row["avgPrice"] or 0)
             if entry <= 0:
@@ -138,7 +148,7 @@ def main() -> None:
     committed = sum(r["spend"] for r in openRows)
     marked = sum(r["shares"] * r["mark"] for r in openRows)
     real = realizedSummary()
-    firstTs = allRows[0]["alertTs"] if allRows else None
+    firstTs = (allRows[0].get("writtenTs") or allRows[0]["alertTs"]) if allRows else None
     print(
         f"open {len(openRows)}: cost ${committed:,.2f}, marks ${marked:,.2f} "
         f"(unrealized ${unrealized:+,.2f})"

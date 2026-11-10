@@ -26,6 +26,16 @@ PNL = ROOT / "data" / "live" / "paperPnl.csv"
 BUDGET = 100.0
 
 
+def signalKey(row: dict) -> tuple[str, str, str]:
+    """Alert identity, keyed the way every other book keys it.
+
+    alertTs alone collides: 59 of the first 72 alerts shared a second with
+    another alert, so a single-field key silently drops most of the book.
+    """
+    return (row.get("alertTs") or "", row.get("account") or "",
+            row.get("eventSlug") or "")
+
+
 def main() -> None:
     if not SIGNALS.exists():
         print("no signals yet")
@@ -34,11 +44,11 @@ def main() -> None:
     if PNL.exists():
         with PNL.open() as fh:
             for row in csv.DictReader(fh):
-                done.add(row["alertTs"])
+                done.add(signalKey(row))
     rows = []
     with SIGNALS.open() as fh:
         for row in csv.DictReader(fh):
-            if row["alertTs"] in done:
+            if signalKey(row) in done:
                 continue
             rows.append(row)
     if not rows:

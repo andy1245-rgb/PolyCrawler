@@ -55,3 +55,28 @@ def test_open_pnl_into_winning_market():
     _, _, _, pnl = pmtm.openPnl(row, 1.0)
     # $100 spent at 0.14 -> 714.3 shares -> +$614.3 at resolution
     assert abs(pnl - (100.0 / 0.14 - 100.0)) < 1e-6
+
+
+def test_signalKey_keeps_apart_alerts_sharing_a_second():
+    """59 of the first 72 live alerts shared an alertTs with another alert, so a
+    single-field dedupe key silently drops most of the book. The key must be the
+    same tuple the other books use."""
+    a = {"alertTs": "2026-11-09 20:00:57", "account": "0xaaa", "eventSlug": "e"}
+    b = {"alertTs": "2026-11-09 20:00:57", "account": "0xbbb", "eventSlug": "e"}
+    same = dict(a)
+    assert pmtm.signalKey(a) != pmtm.signalKey(b)
+    assert pmtm.signalKey(a) == pmtm.signalKey(same)
+    assert len({pmtm.signalKey(r) for r in (a, b, same)}) == 2
+
+
+def test_paperPnl_keys_signals_identically():
+    """paperPnl.py and paperMarkToMarket.py must agree on alert identity, or the
+    realized book and the open book disagree about which alerts are already done."""
+    path = Path(__file__).resolve().parents[1] / "scripts" / "paperPnl.py"
+    spec = importlib.util.spec_from_file_location("ppnl", path)
+    ppnl = importlib.util.module_from_spec(spec)
+    sys.modules["ppnl"] = ppnl
+    spec.loader.exec_module(ppnl)
+    row = {"alertTs": "2026-11-09 20:00:57", "account": "0xaaa", "eventSlug": "e"}
+    assert ppnl.signalKey(row) == pmtm.signalKey(row)
+    assert ppnl.signalKey({}) == pmtm.signalKey({})

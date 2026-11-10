@@ -64,6 +64,20 @@ def parseAlertTs(s: str) -> datetime:
     return datetime.strptime(s, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
 
 
+def entryTs(row: dict) -> datetime | None:
+    """T+0 of the paper position: when the alert was detected and could have been
+    copied. That is writtenTs when the book records it. alertTs is the event time,
+    so anchoring a T+3d/T+7d horizon on it would close a burst replayed days late at
+    the price of the day it was noticed. Falls back to alertTs on older books."""
+    raw = (row.get("writtenTs") or row.get("alertTs") or "").strip()
+    if not raw:
+        return None
+    try:
+        return parseAlertTs(raw)
+    except (ValueError, TypeError):
+        return None
+
+
 def summary(closes: list[dict]) -> tuple[int, float, float]:
     """(n, mean pnl per close, winRate) over lane closes with a horizon."""
     if not closes:
@@ -228,7 +242,9 @@ def runLane(lane: str, cfgLane: dict, now: datetime, marketCache: dict,
         rows = [r for r in csv.DictReader(fh)
                 if r.get("alertTs") and (float(r["bestAsk"] or r["avgPrice"] or 0) > 0)]
     for row in rows:
-        entry = parseAlertTs(row["alertTs"])
+        entry = entryTs(row)
+        if entry is None:
+            continue
         horizons = sorted({int(h) for h in cfgLane["horizonsDays"]})
         done = []
         for horizon in horizons:
