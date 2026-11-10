@@ -11,6 +11,7 @@ Indexed topics: [sig, orderHash, maker, taker].
 
 import importlib.util
 import sys
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location(
@@ -117,10 +118,29 @@ def test_canonical_token_id_strips_leading_zeros():
     assert obo.canonicalTokenId("0" * 50 + "00ec4") == "0xec4"
 
 
+def monthSpan(start: tuple[int, int], end: date) -> int:
+    """Months from `start` to `end` inclusive of both.
+
+    Closed form on purpose: sampleDays walks the same span with a loop, and a
+    copied loop here would mirror an off-by-one instead of catching it.
+    """
+    return (end.year - start[0]) * 12 + (end.month - start[1]) + 1
+
+
 def test_sample_days_deterministic_and_sorted():
-    days = obo.sampleDays((2024, 1), 2, seed=7)
-    again = obo.sampleDays((2024, 1), 2, seed=7)
+    start = (2024, 1)
+    # sampleDays walks from `start` to the current month, so the expected count is
+    # derived from that span rather than pinned to a literal that rots monthly.
+    # The clock is sampled either side of the call so a month boundary mid-test
+    # cannot flake it.
+    before = datetime.now(timezone.utc).date()
+    days = obo.sampleDays(start, 2, seed=7)
+    after = datetime.now(timezone.utc).date()
+    again = obo.sampleDays(start, 2, seed=7)
     assert days == again
-    assert len(days) == 34 * 2  # Jan 2024 .. Oct 2026 = 34 months
+    counts = {monthSpan(start, before) * 2, monthSpan(start, after) * 2}
+    assert len(days) in counts
     assert days == sorted(days)
-    assert all(d.year >= 2024 and d.year <= 2026 for d in days)
+    assert (days[0].year, days[0].month) == start
+    assert (days[-1].year, days[-1].month) in {(before.year, before.month),
+                                               (after.year, after.month)}
