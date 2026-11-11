@@ -5,6 +5,10 @@ reconstructed by tracing Polygon collateral funding rather than inferred from tr
 and every strategy rule is tunable through config files.
 
 - Spec: [`SPEC.md`](SPEC.md)
+- Where the code has moved away from that spec, and which side should change:
+  [`SPEC-DIVERGENCES.md`](SPEC-DIVERGENCES.md)
+- The paper-lane books: time semantics, horizon anchoring, price coverage, signal identity, and
+  what in the live books is untrustworthy: [`docs/paper-lane-records.md`](docs/paper-lane-records.md)
 - v0.1 spec, docs, and scaffolding: [`archive/v1/`](archive/v1/) (reference only)
 
 ## Status
@@ -53,14 +57,11 @@ narrower filter, so the expensive work happens once, at the funding layer.
 
 ## Testing
 
-196 tests across 26 files:
+212 tests across 26 files, all passing:
 
 ```bash
 uv run pytest
 ```
-
-Current state is 195 passing and 1 failing — `test_sample_days_deterministic_and_sorted`
-in `tests/test_order_burst_onchain.py`, a date-sampling assertion. Everything else is green.
 
 ## License
 

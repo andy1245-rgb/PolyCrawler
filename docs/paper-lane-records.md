@@ -1,17 +1,20 @@
-# Overnight 2026-11-10
+# Paper-lane records — event time, book shape, and signal identity
 
-Branch `overnight/2026-11-10`, cut from `polycrawler2` at `27ef519`. Nothing pushed. Nothing
-under `data/live/`, `runs/`, `research/` was rebuilt, pruned or deleted. `SPEC-DIVERGENCES.md`
-was not edited.
+> What the paper-lane books record, why `alertTs` and `writtenTs` are two different columns,
+> how a position's horizon is anchored, what the backtester does with a missing price, and how
+> the CSV books stay readable across a schema change. Ends with what is still contaminated in
+> the live books and the rebuild that would clear it.
 
-Approved scope was two items. Both are implemented and tested, and the first one turned out to
-have a second half in the readers that had to be fixed with it or the fix would have corrupted
-the lane gates. That is section 2. Section 6 records the adversarial review that caught it.
+A live signal has two times: when the event happened and when the watcher noticed. The books
+recorded one, and every consumer read it as the other. Fixing that meant fixing the readers
+that measure elapsed time from it, which is the larger half of the work. Three further defects
+were found on the way — a skipped trade that left no trace, a schema change that would have
+misaligned existing books, and a dedupe key that had already collapsed 72 rows to 22.
 
 ## 1. `writtenTs`, and `alertTs` now means the event
 
-**The bug.** `alertTs` was written as `nowIso()`, the wall clock at the moment of writing. Every
-consumer already treated that column as the event time: `bookExecStamps` computes
+**The defect.** `alertTs` was written as `nowIso()`, the wall clock at the moment of writing.
+Every consumer already treated that column as the event time: `bookExecStamps` computes
 `dueAt = alertTs + horizon`, `paperLaneMarks` computes T+3d/T+7d from it, `laneWeekly` reads its
 dates from it, `execute.py` uses it as the signal id. The event timestamp was not lost lower down
 the pipe. It was never written at all, and the column meant to hold it held the write time.
@@ -32,10 +35,10 @@ csv row: alertTs = 2026-11-10 08:54:49            <- the write
   column. `onAlert1` takes `eventTs` and `writtenTs` instead of a single `when`. `alert3` writes
   the event time into `alertTs` and `nowIso()` into `writtenTs`.
 
-So a replayed burst carries the day it happened in `alertTs` and the day it was noticed in
+A replayed burst now carries the day it happened in `alertTs` and the day it was noticed in
 `writtenTs`, and the gap between them is the lateness.
 
-## 2. The other half: readers that measure elapsed time need `writtenTs`
+## 2. Readers that measure elapsed time need `writtenTs`
 
 Moving `alertTs` to the event time silently re-anchored every horizon consumer, because until now
 the two meanings coincided. `paperLaneMarks` closes a position once `now >= alertTs + horizon`,
@@ -51,7 +54,7 @@ So T+0 of a paper position is explicitly the detection moment:
   back to `alertTs` on books written before the column existed. Horizon closes and the open
   snapshot both use it. `alertTs` still keys `laneCloses.csv`, because it is the alert's identity.
 - `scripts/paperMarkToMarket.py` takes its weeks-since-first-signal from `writtenTs` for the same
-  reason: that gate counts how long we have been observing, not how old the oldest event is.
+  reason: that gate counts how long the book has been observed, not how old the oldest event is.
 
 Two consumers deliberately stay on `alertTs` (the event time):
 
@@ -59,17 +62,18 @@ Two consumers deliberately stay on `alertTs` (the event time):
   `research/executionStamps.md` buckets only rows whose `stampDrivenS <= 3600`. Anchoring on the
   event time pushes a replay to roughly `10^6` s, so the documented filter now excludes it. The old
   behaviour put 60 fabricated stamps inside the pre-registered `[3, 610]` window, which is the
-  corruption this whole change exists to stop.
+  corruption this change exists to stop.
 - `execute.py` keeps its 60-minute age gate on `alertTs`, so a burst replayed days late is no
   longer executable. That closes a real hole: before this, a replayed alert looked fresh to
   `--latest` and could have been bought. It is a behaviour change in the only path that can place
-  real orders and it is recorded here rather than inherited silently.
+  real orders, and it is recorded here rather than inherited silently.
 
 ## 3. A missing price is counted, not dropped
 
-**The bug.** `_onBuy` ended with `if shares <= 0 or ourPrice is None: return`. With no print inside
-the 6h staleness window there was no price, no trade, and no record that a copy had been attempted,
-so a run that skipped half its opportunities looked identical to one that took them all.
+**The defect.** `_onBuy` ended with `if shares <= 0 or ourPrice is None: return`. With no print
+inside the 6h staleness window there was no price, no trade, and no record that a copy had been
+attempted, so a run that skipped half its opportunities looked identical to one that took them
+all.
 
 **The change**, in `src/polycrawler/backtest.py`:
 
@@ -85,7 +89,7 @@ so a run that skipped half its opportunities looked identical to one that took t
 No behaviour changed. `orderShares` already returned `0.0` for a null price and `_maybeExit` could
 already not exit an unarmed key, so splitting both conditions only adds the counters. An idle row
 blocked by a cap rather than by price still lands in neither counter, so coverage reads "of the
-copies we tried to price, how many had a price".
+copies a run tried to price, how many had a price".
 
 ## 4. The schema guard, because `data/live` cannot be rebuilt yet
 
@@ -114,10 +118,10 @@ The `ValueError` case matters: `alert()` calls `appendCsv` on every alert and no
 catches, so before that fix a book in another encoding would have crashed the watcher and recursed
 on every restart.
 
-**Consequence you should hold in mind:** on the existing books `writtenTs` is withheld, so the
-`alertTs` correction is the whole of the protection there, and `entryTs` falls back to `alertTs`
-exactly as before. That keeps the current books behaving as they always did. It does not tell you
-from the file which historical rows were replays. Only the rebuild does that.
+**Consequence to hold in mind:** on the existing books `writtenTs` is withheld, so the `alertTs`
+correction is the whole of the protection there, and `entryTs` falls back to `alertTs` exactly as
+before. That keeps the current books behaving as they always did. It does not tell a reader from
+the file which historical rows were replays. Only the rebuild does that.
 
 ## 5. The dedupe key, which was already losing alerts
 
@@ -133,24 +137,24 @@ Both now key on `signalKey(row)` = `(alertTs, account, eventSlug)`, the tuple `b
 `laneWeekly` and `paperLaneMarks` already use. No migration: `paperPnl.csv` does not exist and
 `openPositions.csv` is rewritten wholesale each run.
 
-## 6. The adversarial review
+## 6. Review: what an independent read of the change caught
 
-A reviewer that did not write the code went through the diff against the repository, and it found
-one thing that mattered, which is section 2: the horizon consumers. Its verdict was "not safe to
-commit" on that ground, and it was right. What it got wrong was smaller; what it got right in the
-small is listed in section 7 as tests that now fail on revert.
+An independent read-through of the diff against the repository found one thing that mattered,
+which is section 2: the horizon consumers. Its verdict on that ground was that the change was not
+safe to commit, and that was correct. What it got right in the small is listed in section 7 as
+tests that now fail on revert.
 
-Where I disagreed, and why:
+Where the review and the change disagreed, and how each was resolved:
 
 - It called the `bookExecStamps` re-anchor a regression. It is the opposite: the pre-registered
   filter is `stampDrivenS <= 3600`, and event-anchoring is what makes a replay fall outside it.
   That reasoning is in section 2.
 - It flagged `execute.py` refusing late alerts as an undocumented side effect. Agreed on
-  documentation, which section 2 now carries. The behaviour is the safe one and I left it.
+  documentation, which section 2 now carries. The behaviour is the safe one and was kept.
 - It read "62 of 72 rows carry 2026-11-09" as the premise. It is 62 rows dated 2026-11-09 of which
   61 are replayed, confirmed by matching the watcher's console event times against the rows.
-- Its note that a bare `git commit` would record only the chmod was true when it looked. The work
-  is committed with explicit pathspecs and the chmod is deliberately still staged only.
+- Its note that a bare commit would record only the file-mode change was true when it looked; the
+  work is committed with explicit pathspecs.
 
 `noPriceSkips` keys were renamed to `entryAttempts`/`exitAttempts`/`markLots` because the review was
 right that one dict was mixing three units. `formatSummary` formatting was fixed.
@@ -164,9 +168,8 @@ Both spellings give the same result:
 uv run pytest -q                ->  212 passed
 ```
 
-Before this branch the tree was 1 failed, 195 passed. 16 tests were added and the one
-pre-existing failure was repaired, so the suite is now green: 196 tests existed before, 212 exist
-now.
+The tree carried 1 failed and 195 passed before this work. 16 tests were added and the one
+pre-existing failure was repaired, so the suite is green: 196 tests existed before, 212 exist now.
 
 The failure was `test_order_burst_onchain.py::test_sample_days_deterministic_and_sorted`, which
 asserted `len(days) == 34 * 2` against a comment dating the range "Jan 2024 .. Oct 2026".
@@ -176,8 +179,8 @@ now derived from the span the sampler actually walks, using a closed-form `month
 copy of the loop so an off-by-one inside `sampleDays` cannot mirror itself in the expectation, and
 the clock is sampled either side of the call so a month boundary mid-test cannot flake it. That
 test's `d.year <= 2026` bound, which would have rotted the same way in January, is replaced by
-asserting the walk starts at the given month and ends at the current one. It is not this branch's
-bug and it is not this branch's code, but it blocked a green suite.
+asserting the walk starts at the given month and ends at the current one. It was not introduced
+here, but it blocked a green suite.
 
 New tests, and each one is checked to fail when the fix it guards is reverted:
 
@@ -211,12 +214,33 @@ passes, so the two writers cannot drift.
 Also verified by hand against copies of the three real headers: signals 13 columns, lane2 13, lane3
 15, every row aligned, `data/live` untouched.
 
-## 8. What is still contaminated
+## 8. What is not verified
 
-The running watcher is still the process cron started at 2026-11-09 15:00:01 (pid 1074445), so it
-holds the pre-change code. `writtenTs` will not appear and `alertTs` will stay write-time until that
-process next starts. I did not restart it mid-burst, and cron restarts it on the next tick where it
-finds it down.
+- The live path is verified by the repo's tests and by a smoke test of the writer against copies of
+  the real headers. No live alert has yet been written by the new code: the deployed watcher
+  process is the old one.
+- `entryCoverage` is exercised on synthetic frames only. No `pc2 backtest` ran on real data with
+  this change, so the coverage of existing runs is unknown. It will be in every summary from now
+  on.
+- The `exitAttempts` and `markLots` counters are covered by direct unit tests of `_maybeExit` and
+  `_markOpen`, not by a full replay. A full-replay case for either is not in the suite.
+- Lane 2 cloning into a still-legacy book is covered by composition, not by its own test: the guard
+  is tested against all three real headers and against reordered, short and blank books, and the
+  clone path is tested against a fresh book.
+- Nothing enforces a single writer. `appendCsv` owns the write in code, but `readHeader` plus
+  `open("a")` is a TOCTOU: two processes that both see a missing file would both write a header. It
+  did not fire under 4x3 racing processes, and `dailyCatchup.sh` only restarts the watcher when
+  `pgrep` finds none.
+- The `bookExecStamps` upper lateness bound is still missing. Replays now fall outside the
+  documented filter instead of inside it, but they are still written. Recommended next: skip a
+  stamp whose `stampDrivenS` exceeds a configurable ceiling and count it as `stale` instead.
+
+## 9. The replay, and what in the live books is trustworthy — 2026-11-10
+
+The deployed watcher is still the process cron started at 2026-11-09 15:00:01 (pid 1074445), so it
+holds the pre-change code. `writtenTs` will not appear and `alertTs` will stay write-time until
+that process next starts. It was not restarted mid-burst, and cron restarts it on the next tick
+where it finds it down.
 
 The replay itself is over (the dedup keys are in `state.json`), so nothing is being contaminated
 now. The same replay would happen on any cold start with an empty dedup store; this change makes it
@@ -239,17 +263,18 @@ those dates. They were written live, seconds after the event.
 
 **Nothing derived from the 2026-11-09 rows should be quoted:** `laneCloses.csv`, `laneMarks.csv`,
 `openPositions.csv`, `trajectory.csv` and the lane readout all read those books. The lane gates are
-`INCONCLUSIVE-THIN` anyway, but that is now beside the point.
+`INCONCLUSIVE-THIN` anyway, but that is beside the point here.
 
-## 9. The rebuild, once you approve it
+## 10. The rebuild, which has not been run
 
-This is the command that would put `data/live` on the clean shape. It is destructive in two ways: it
-removes 127 rows, and it re-runs the derived books. I have dry-run the filter against copies of the
-real files (72 → 10, 63 → 1, 6 → 3, all rows still aligned) and have run none of it against
-`data/live`.
+This is the sequence that would put `data/live` on the clean shape. It is destructive in two ways:
+it removes 127 rows, and it re-runs the derived books. The filter has been dry-run against copies
+of the real files (72 → 10, 63 → 1, 6 → 3, all rows still aligned) and none of it has been run
+against `data/live`. Nothing under `data/live/`, `runs/` or `research/` was rebuilt, pruned or
+deleted to produce this document.
 
 ```bash
-cd /home/andrew/polycrawler2
+cd ~/polycrawler2
 
 # 1. Archive, never delete.
 mkdir -p data/live/archive-2026-11-10
@@ -288,31 +313,7 @@ uv run python scripts/laneWeekly.py
 ```
 
 Step 2 preserves the old 13/13/15 column lists, so `writtenTs` is still withheld and `entryTs`
-keeps falling back to `alertTs` for the kept rows. If you want `writtenTs` on the surviving history
-instead, step 2 has to write the new header and pad the kept rows with an empty `writtenTs`. That is
-the difference between "the old rows are honest about not knowing when they were written" and "the
-old rows claim a blank". Say which and it is one line either way.
-
-## 10. What I did not verify
-
-- The live path is verified by the repo's tests and by a smoke test of the writer against copies of
-  the real headers. No live alert has yet been written by the new code, because the running watcher
-  is the old process.
-- `entryCoverage` is exercised on synthetic frames only. No `pc2 backtest` ran on real data on this
-  branch, so I cannot tell you what coverage your existing runs actually had. It will be in every
-  summary from now on.
-- The `exitAttempts` and `markLots` counters are now covered by direct unit tests of `_maybeExit`
-  and `_markOpen`, not by a full replay. A full-replay case for either is not in the suite.
-- Lane 2 cloning into a still-legacy book is covered by composition, not by its own test: the guard
-  is tested against all three real headers and against reordered, short and blank books, and the
-  clone path is tested against a fresh book.
-- Nothing enforces a single writer. `appendCsv` owns the write in code, but `readHeader` plus
-  `open("a")` is a TOCTOU: two processes that both see a missing file would both write a header. It
-  did not fire under 4x3 racing processes, and `dailyCatchup.sh` only restarts the watcher when
-  `pgrep` finds none.
-- The `bookExecStamps` upper lateness bound is still missing. Replays now fall outside the
-  documented filter instead of inside it, but they are still written. Recommended next: skip a
-  stamp whose `stampDrivenS` exceeds a configurable ceiling and count it as `stale` instead.
-- The `scripts/dailyCatchup.sh` mode change from the earlier session (`100644` to `100755`) is
-  deliberately **not** part of these commits. It is still staged only, a separate decision, still
-  pending.
+keeps falling back to `alertTs` for the kept rows. The alternative is for step 2 to write the new
+header and pad the kept rows with an empty `writtenTs` — the difference between "the old rows are
+honest about not knowing when they were written" and "the old rows claim a blank". That choice is
+open, and it is one line either way.
