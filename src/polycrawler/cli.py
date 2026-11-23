@@ -12,6 +12,7 @@ from polycrawler.backtest import (
     dirsFromConfig,
     formatSummary,
     loadInputs,
+    loadPrices,
     prepareBacktest,
     runBacktest,
 )
@@ -39,6 +40,7 @@ def fetch(
     typer.echo(f"markets {summary.markets}")
     typer.echo(f"fills {summary.fills}")
     typer.echo(f"accounts {summary.accounts}")
+    typer.echo(f"prices {summary.prices}")
 
 
 @app.command()
@@ -201,6 +203,7 @@ def backtest(
         endTs,
         clusterMap=clusterMap,
         runsDir=root / runsDir,
+        quotes=loadPrices(dirs),
     )
     typer.echo(formatSummary(result))
     typer.echo(f"wrote {root / runsDir / result.paramsHash}")
@@ -231,7 +234,9 @@ def sweep(
     startTs = datetime(
         loaded.splitDate.year, loaded.splitDate.month, loaded.splitDate.day, tzinfo=timezone.utc
     )
-    prepared = prepareBacktest(fills, markets, accounts, startTs, endTs, clusterMap)
+    prepared = prepareBacktest(
+        fills, markets, accounts, startTs, endTs, clusterMap, quotes=loadPrices(dirs)
+    )
     ranked = runSweep(prepared, params, spec.grid, spec.objective, spec.minTrades, spec.minEvents)
     out = writeSweep(ranked, spec.name, root / runsDir)
     kept = int(ranked.filter(pl.col("eligible")).height) if ranked.height else 0

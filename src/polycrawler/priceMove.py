@@ -233,22 +233,15 @@ def buildPriceTape(fills: pl.DataFrame, markets: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def priceAt(
-    tape: pl.DataFrame,
-    queries: pl.DataFrame,
-    stale: timedelta = staleWindow,
-) -> pl.DataFrame:
-    """Attach the last trade at or before each query timestamp.
-
-    `queries` needs marketId, outcome, and ts. Price is null when no print falls
-    inside the previous `stale` window.
-    """
-    if queries.height == 0 or tape.height == 0:
-        return queries.with_columns(pl.lit(None, dtype=pl.Float64).alias("price"))
-    tagged = queries.with_row_index("__qid")
-    left = tagged.sort(["marketId", "outcome", "ts"])
-    right = tape.select("marketId", "outcome", "ts", "price").sort(["marketId", "outcome", "ts"])
-    joined = left.join_asof(
+def _attachPrice(frame: pl.DataFrame, series: pl.DataFrame, stale: timedelta,
+                 name: str) -> pl.DataFrame:
+    """As-of join one tape onto the queries, land the price under `name`."""
+    if series.height == 0:
+        return frame.with_columns(pl.lit(None, dtype=pl.Float64).alias(name))
+    right = series.select("marketId", "outcome", "ts", "price").sort(
+        ["marketId", "outcome", "ts"]
+    )
+    joined = frame.sort(["marketId", "outcome", "ts"]).join_asof(
         right,
         on="ts",
         by=["marketId", "outcome"],
@@ -256,7 +249,54 @@ def priceAt(
         tolerance=stale,
         check_sortedness=False,
     )
-    return joined.sort("__qid").drop("__qid")
+    return joined.with_columns(pl.col("price").alias(name)).drop("price")
+
+
+def priceAt(
+    tape: pl.DataFrame,
+    queries: pl.DataFrame,
+    stale: timedelta = staleWindow,
+    quotes: pl.DataFrame | None = None,
+) -> pl.DataFrame:
+    """Attach the last trade at or before each query timestamp.
+
+    `queries` needs marketId, outcome, and ts. Price is null when no print falls
+    inside the previous `stale` window.
+
+    `quotes` is an optional CLOB price-history tape with the same columns. It is
+    used only where the trade tape has nothing inside the window, so a market that
+    nobody traded still gets a price while every existing print-priced number stays
+    put. The returned `source` column says which one priced the row, "print" or
+    "quote", or null when neither could, so the two populations can be reported
+    apart instead of being blended.
+    """
+    if queries.height == 0:
+        return queries.with_columns(
+            pl.lit(None, dtype=pl.Float64).alias("price"),
+            pl.lit(None, dtype=pl.String).alias("source"),
+        )
+    tagged = queries.with_row_index("__qid")
+    out = _attachPrice(tagged, tape, stale, "pricePrint")
+    hasQuotes = quotes is not None and quotes.height > 0
+    if hasQuotes:
+        out = _attachPrice(out, quotes, stale, "priceQuote")
+        out = out.with_columns(
+            pl.coalesce(pl.col("pricePrint"), pl.col("priceQuote")).alias("price"),
+            pl.when(pl.col("pricePrint").is_not_null())
+            .then(pl.lit("print"))
+            .when(pl.col("priceQuote").is_not_null())
+            .then(pl.lit("quote"))
+            .otherwise(pl.lit(None, dtype=pl.String))
+            .alias("source"),
+        ).drop("pricePrint", "priceQuote")
+    else:
+        out = out.rename({"pricePrint": "price"}).with_columns(
+            pl.when(pl.col("price").is_not_null())
+            .then(pl.lit("print"))
+            .otherwise(pl.lit(None, dtype=pl.String))
+            .alias("source")
+        )
+    return out.sort("__qid").drop("__qid")
 
 
 def _marksAt(entries: pl.DataFrame, tape: pl.DataFrame, offsets: Sequence[int]) -> pl.DataFrame:

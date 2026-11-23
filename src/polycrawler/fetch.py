@@ -9,7 +9,7 @@ import httpx
 import polars as pl
 
 from polycrawler.config import Config, FetchConfig
-from polycrawler.http import HttpSession, cachePath, writeJson
+from polycrawler.http import HttpSession, JsonRequest, cachePath, writeJson
 
 __all__ = ["cachePath", "writeJson"]
 
@@ -53,17 +53,32 @@ marketDedupeKeys = ["marketId"]
 fillDedupeKeys = ["txHash", "account", "marketId", "outcome", "side", "size", "price", "ts"]
 
 
+priceHistorySchema = {
+    "ts": pl.Datetime(time_unit="us", time_zone="UTC"),
+    "marketId": pl.String,
+    "outcome": pl.String,
+    "price": pl.Float64,
+    "tokenId": pl.String,
+}
+priceDedupeKeys = ["tokenId", "ts"]
+clobApi = "https://clob.polymarket.com"
+priceFidelityMin = 60
+priceWorkers = 8
+
+
 @dataclass
 class FetchSummary:
     markets: int
     fills: int
     accounts: int
+    prices: int = 0
 
 
 def runFetch(
     config: Config,
     eventSlugs: list[str] | None = None,
     refresh: bool = False,
+    prices: bool = True,
 ) -> FetchSummary:
     slugs = list(eventSlugs) if eventSlugs else list(config.fetch.eventSlugs)
     dataDir = config.fetch.dataDir
@@ -74,11 +89,91 @@ def runFetch(
     ) as client:
         markets = fetchMarkets(config.fetch, slugs, dataDir, refresh, client)
         fills = fetchFills([row["marketId"] for row in markets], dataDir, refresh, client)
+        quotes = fetchPrices(markets, dataDir, refresh, client) if prices else []
     dataPath = Path(dataDir)
     upsertTable(dataPath / "markets.parquet", markets, marketSchema, marketDedupeKeys, ["marketId"])
     upsertTable(dataPath / "fills.parquet", fills, fillSchema, fillDedupeKeys, ["ts", "txHash"])
+    if quotes:
+        upsertTable(
+            dataPath / "prices.parquet", quotes, priceHistorySchema,
+            priceDedupeKeys, ["marketId", "outcome", "ts"],
+        )
     accounts = len({row["account"] for row in fills})
-    return FetchSummary(markets=len(markets), fills=len(fills), accounts=accounts)
+    return FetchSummary(
+        markets=len(markets), fills=len(fills), accounts=accounts, prices=len(quotes)
+    )
+
+
+def fetchPrices(
+    markets: list[dict[str, Any]],
+    dataDir: str,
+    refresh: bool,
+    client: httpx.Client,
+) -> list[dict[str, Any]]:
+    """CLOB `prices-history` for every outcome token, so a market that nobody
+    traded inside the staleness window still has a price to quote.
+
+    One request per token, cached under data/raw/prices/. Returns the `prices`
+    table rows; `runFetch` writes them to data/prices.parquet. Nothing here is
+    consulted by discovery, and the backtest only reads the parquet.
+    """
+    targets: list[tuple[str, str, str]] = []
+    for market in markets:
+        outcomes = parseJsonList(market.get("outcomes"))
+        tokens = parseJsonList(market.get("clobTokenIds"))
+        for outcome, token in zip(outcomes, tokens):
+            if token and outcome:
+                targets.append((market["marketId"], outcome, token))
+    if not targets:
+        return []
+    session = sessionFor(client)
+    if session.dataDir is None:
+        session.dataDir = dataDir
+    requests = [
+        JsonRequest(
+            url=f"{clobApi}/prices-history",
+            params={"market": token, "interval": "max", "fidelity": priceFidelityMin},
+            cacheKind="prices",
+            cacheKey=token,
+            refresh=refresh,
+        )
+        for _marketId, _outcome, token in targets
+    ]
+    payloads = session.fetchMany(requests, maxWorkers=priceWorkers)
+    rows: list[dict[str, Any]] = []
+    for (marketId, outcome, token), payload in zip(targets, payloads):
+        rows.extend(normalizePriceHistory(payload, marketId, outcome, token))
+    return rows
+
+
+def normalizePriceHistory(
+    payload: Any, marketId: str, outcome: str, tokenId: str
+) -> list[dict[str, Any]]:
+    """`{"history": [{"t": epochSeconds, "p": price}]}` to price rows."""
+    history = payload.get("history") if isinstance(payload, dict) else None
+    if not isinstance(history, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for point in history:
+        if not isinstance(point, dict):
+            continue
+        try:
+            when = parseTime(point.get("t"))
+            value = float(point.get("p"))
+        except (TypeError, ValueError):
+            continue
+        if when is None or not 0.0 <= value <= 1.0:
+            continue
+        rows.append(
+            {
+                "ts": when,
+                "marketId": marketId,
+                "outcome": outcome,
+                "price": value,
+                "tokenId": tokenId,
+            }
+        )
+    return rows
 
 
 def fetchMarkets(

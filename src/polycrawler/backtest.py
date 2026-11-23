@@ -73,6 +73,8 @@ tradeSchema = {
     "pnl": pl.Float64,
     "exitReason": pl.String,
     "marked": pl.Boolean,
+    "entryPriceSource": pl.String,
+    "exitPriceSource": pl.String,
 }
 
 
@@ -96,6 +98,8 @@ class Lot:
     exitPrice: float | None = None
     exitReason: str | None = None
     marked: bool = False
+    entryPriceSource: str | None = None
+    exitPriceSource: str | None = None
 
     @property
     def pnl(self) -> float | None:
@@ -127,12 +131,43 @@ class Book:
     noPrice: dict[str, int] = field(default_factory=noPriceCounts)
 
 
+def _emptyQuotes() -> pl.DataFrame:
+    return pl.DataFrame(
+        schema={
+            "marketId": pl.String,
+            "outcome": pl.String,
+            "ts": tsType,
+            "price": pl.Float64,
+            "tokenId": pl.String,
+        }
+    )
+
+
+def loadPrices(dataDirs: Sequence[str | Path]) -> pl.DataFrame:
+    """Concatenate data/prices.parquet from every data root that has one.
+
+    Absent everywhere is normal: the backtest then prices from the trade tape
+    alone, exactly as it did before the CLOB fetch existed.
+    """
+    frames = []
+    for item in dataDirs:
+        path = Path(item) / "prices.parquet"
+        if path.exists():
+            frames.append(pl.read_parquet(path))
+    if not frames:
+        return _emptyQuotes()
+    return pl.concat(frames, how="diagonal_relaxed").unique(
+        subset=["tokenId", "ts"], keep="last"
+    )
+
+
 @dataclass
 class Prepared:
     path: pl.DataFrame
     tape: pl.DataFrame
     startTs: datetime
     endTs: datetime
+    quotes: pl.DataFrame = field(default_factory=lambda: _emptyQuotes())
 
 
 @dataclass
@@ -168,6 +203,7 @@ def prepareBacktest(
     startTs: datetime,
     endTs: datetime,
     clusterMap: dict[str, str] | None = None,
+    quotes: pl.DataFrame | None = None,
 ) -> Prepared:
     lazy = _lazy(fills)
     wanted = sorted({account.lower() for account in accountsToCopy})
@@ -237,7 +273,13 @@ def prepareBacktest(
         )
     else:
         path = _attachMarkets(path, markets)
-    return Prepared(path=path, tape=tape, startTs=startTs, endTs=endTs)
+    return Prepared(
+        path=path,
+        tape=tape,
+        startTs=startTs,
+        endTs=endTs,
+        quotes=_emptyQuotes() if quotes is None else quotes,
+    )
 
 
 def _attachMarkets(path: pl.DataFrame, markets: pl.DataFrame) -> pl.DataFrame:
@@ -269,8 +311,10 @@ def _prices(
     slippageBps: float,
     buying: bool,
     idColumn: str,
-) -> dict[int, float | None]:
-    if frame.height == 0 or tape.height == 0:
+    quotes: pl.DataFrame | None = None,
+) -> dict[int, tuple[float | None, str | None]]:
+    hasQuotes = quotes is not None and quotes.height > 0
+    if frame.height == 0 or (tape.height == 0 and not hasQuotes):
         return {}
     queries = _utc(
         frame.select(
@@ -281,10 +325,11 @@ def _prices(
         ),
         "ts",
     )
-    priced = priceAt(tape, queries)
-    out: dict[int, float | None] = {}
+    priced = priceAt(tape, queries, quotes=quotes)
+    out: dict[int, tuple[float | None, str | None]] = {}
     for row in priced.iter_rows(named=True):
-        out[int(row[idColumn])] = _slip(row["price"], slippageBps, buying)
+        price = _slip(row["price"], slippageBps, buying)
+        out[int(row[idColumn])] = (price, row["source"] if price is not None else None)
     return out
 
 
@@ -309,6 +354,7 @@ def _blankSummary(startTs: datetime, endTs: datetime, digest: str) -> dict:
         "markedCount": 0,
         "noPriceSkips": noPriceCounts(),
         "entryCoverage": None,
+        "priceSources": priceSourceCounts(),
         "startTs": startTs.isoformat(),
         "endTs": endTs.isoformat(),
         "paramsHash": digest,
@@ -326,6 +372,7 @@ def _closeKey(
     exitPrice: float,
     reason: str,
     marked: bool,
+    exitSource: str | None = None,
 ) -> None:
     lots = book.openLots.pop(key, [])
     book.armed.discard(key)
@@ -334,6 +381,7 @@ def _closeKey(
         lot.exitPrice = exitPrice
         lot.exitReason = reason
         lot.marked = marked
+        lot.exitPriceSource = exitSource
         book.exposure -= lot.usd
         book.closed.append(lot)
     if book.exposure < 1e-9:
@@ -346,6 +394,7 @@ def _maybeExit(
     fillTs: datetime,
     exitPrice: float | None,
     params,
+    exitSource: str | None = None,
 ) -> None:
     if params.exitMode != "followCluster" or key not in book.openLots:
         return
@@ -361,7 +410,7 @@ def _maybeExit(
         book.noPrice["exitAttempts"] += 1
         return
     exitTs = fillTs + timedelta(seconds=int(params.delaySec))
-    _closeKey(book, key, exitTs, exitPrice, "followCluster", False)
+    _closeKey(book, key, exitTs, exitPrice, "followCluster", False, exitSource)
 
 
 def _openLot(
@@ -372,6 +421,7 @@ def _openLot(
     params,
     theirPrice: float | None = None,
     theirUsd: float | None = None,
+    priceSource: str | None = None,
 ) -> None:
     usd = shares * ourPrice
     group = row["accountGroup"]
@@ -392,6 +442,7 @@ def _openLot(
         entryPrice=ourPrice,
         shares=shares,
         usd=usd,
+        entryPriceSource=priceSource,
     )
     book.nextId += 1
     book.openLots.setdefault(key, []).append(lot)
@@ -404,7 +455,14 @@ def _openLot(
             book.armed.add(key)
 
 
-def _onBuy(book: Book, row: dict, ourPrice: float | None, params, endTs: datetime) -> None:
+def _onBuy(
+    book: Book,
+    row: dict,
+    ourPrice: float | None,
+    params,
+    endTs: datetime,
+    priceSource: str | None = None,
+) -> None:
     key = (row["accountGroup"], row["marketId"], row["outcome"])
     burst, fillSize = observeBuy(
         book.bursts.get(key), row["ts"], float(row["size"]), float(row["price"])
@@ -443,7 +501,7 @@ def _onBuy(book: Book, row: dict, ourPrice: float | None, params, endTs: datetim
     else:
         theirPrice = float(row["price"])
         theirUsd = float(row["size"]) * theirPrice
-    _openLot(book, row, ourPrice, shares, params, theirPrice, theirUsd)
+    _openLot(book, row, ourPrice, shares, params, theirPrice, theirUsd, priceSource)
     burst.copying = True
 
 
@@ -477,14 +535,20 @@ def _resolveMarket(book: Book, marketId: str, winner: str, when: datetime) -> No
             book.exposure = 0.0
 
 
-def _markOpen(book: Book, tape: pl.DataFrame, endTs: datetime) -> None:
+def _markOpen(
+    book: Book,
+    tape: pl.DataFrame,
+    endTs: datetime,
+    quotes: pl.DataFrame | None = None,
+) -> None:
     stillOpen = [lot for lots in book.openLots.values() for lot in lots]
     book.openLots.clear()
     book.armed.clear()
     if not stillOpen:
         return
-    prices: dict[int, float | None] = {}
-    if tape.height:
+    prices: dict[int, tuple[float | None, str | None]] = {}
+    hasQuotes = quotes is not None and quotes.height > 0
+    if tape.height or hasQuotes:
         queries = _utc(
             pl.DataFrame(
                 {
@@ -496,13 +560,15 @@ def _markOpen(book: Book, tape: pl.DataFrame, endTs: datetime) -> None:
             ),
             "ts",
         )
-        priced = priceAt(tape, queries, stale=markHorizon)
+        priced = priceAt(tape, queries, stale=markHorizon, quotes=quotes)
         for row in priced.iter_rows(named=True):
             price = row["price"]
-            prices[int(row["tradeId"])] = None if price is None else float(price)
+            prices[int(row["tradeId"])] = (
+                (None, None) if price is None else (float(price), row["source"])
+            )
     for lot in stillOpen:
         lot.exitTs = endTs
-        lot.exitPrice = prices.get(lot.tradeId)
+        lot.exitPrice, lot.exitPriceSource = prices.get(lot.tradeId, (None, None))
         if lot.exitPrice is None:
             book.noPrice["markLots"] += 1
         lot.exitReason = "mark"
@@ -514,16 +580,18 @@ def _fillPrices(
     prepared: Prepared,
     params: BacktestParams,
     cache: dict | None,
-) -> tuple[dict[int, float | None], dict[int, float | None]]:
-    key = (int(params.delaySec), float(params.slippageBps))
+) -> tuple[dict[int, tuple], dict[int, tuple]]:
+    key = (int(params.delaySec), float(params.slippageBps), prepared.quotes.height)
     store = cache if cache is not None else {}
     if key not in store:
         store[key] = (
             _prices(
-                prepared.path, prepared.tape, params.delaySec, params.slippageBps, True, "rowId"
+                prepared.path, prepared.tape, params.delaySec, params.slippageBps, True,
+                "rowId", prepared.quotes,
             ),
             _prices(
-                prepared.path, prepared.tape, params.delaySec, params.slippageBps, False, "rowId"
+                prepared.path, prepared.tape, params.delaySec, params.slippageBps, False,
+                "rowId", prepared.quotes,
             ),
         )
     return store[key]
@@ -554,12 +622,14 @@ def _replay(
             key = (row["accountGroup"], row["marketId"], row["outcome"])
             book.net[key] = float(row["netShares"])
             book.lastPrice[key] = float(row["price"])
-            _maybeExit(book, key, row["ts"], exitPrices.get(int(row["rowId"])), params)
+            exitPrice, exitSource = exitPrices.get(int(row["rowId"]), (None, None))
+            _maybeExit(book, key, row["ts"], exitPrice, params, exitSource)
             if row["side"] == "BUY":
-                _onBuy(book, row, buyPrices.get(int(row["rowId"])), params, prepared.endTs)
+                ourPrice, ourSource = buyPrices.get(int(row["rowId"]), (None, None))
+                _onBuy(book, row, ourPrice, params, prepared.endTs, ourSource)
         else:
             _resolveMarket(book, row["marketId"], row["winner"], row["resolvedAt"])
-    _markOpen(book, prepared.tape, prepared.endTs)
+    _markOpen(book, prepared.tape, prepared.endTs, prepared.quotes)
     return book.closed, dict(book.noPrice)
 
 
@@ -651,8 +721,28 @@ def _summarize(
             "markedCount": sum(1 for lot in ordered if lot.marked),
         }
     )
+    summary["priceSources"] = priceSourceCounts(ordered)
     _setCoverage(summary, skips)
     return summary
+
+
+def priceSourceCounts(lots: Sequence[Lot] = ()) -> dict[str, int]:
+    """How many priced rows came from a trade print and how many from a quote.
+
+    Kept apart so a run's coverage can be read for what it is: quote-priced rows
+    exist only where the tape had nothing inside the staleness window.
+    """
+    counts = {"entryPrint": 0, "entryQuote": 0, "exitPrint": 0, "exitQuote": 0}
+    for lot in lots:
+        if lot.entryPriceSource == "print":
+            counts["entryPrint"] += 1
+        elif lot.entryPriceSource == "quote":
+            counts["entryQuote"] += 1
+        if lot.exitPriceSource == "print":
+            counts["exitPrint"] += 1
+        elif lot.exitPriceSource == "quote":
+            counts["exitQuote"] += 1
+    return counts
 
 
 def _setCoverage(summary: dict, skips: dict[str, int]) -> None:
@@ -686,6 +776,8 @@ def _tradesFrame(lots: Sequence[Lot]) -> pl.DataFrame:
                 "pnl": lot.pnl,
                 "exitReason": lot.exitReason,
                 "marked": lot.marked,
+                "entryPriceSource": lot.entryPriceSource,
+                "exitPriceSource": lot.exitPriceSource,
             }
         )
     return _utc(_utc(pl.DataFrame(rows, schema=tradeSchema), "entryTs"), "exitTs")
@@ -715,10 +807,13 @@ def runBacktest(
     endTs: datetime,
     clusterMap: dict[str, str] | None = None,
     runsDir: str | Path | None = None,
+    quotes: pl.DataFrame | None = None,
 ) -> BacktestResult:
     if getattr(params, "accountSelection", "discovery") == "rule":
         accountsToCopy = selectRuleAccounts(fills, markets, params)
-    prepared = prepareBacktest(fills, markets, accountsToCopy, startTs, endTs, clusterMap)
+    prepared = prepareBacktest(
+        fills, markets, accountsToCopy, startTs, endTs, clusterMap, quotes=quotes
+    )
     result = runPrepared(prepared, params)
     if runsDir is not None:
         writeRun(result, runsDir)
@@ -747,6 +842,7 @@ def formatSummary(result: BacktestResult) -> str:
             f"noPriceSkips {summary['noPriceSkips']}  "
             f"entryCoverage {cov if (cov := summary['entryCoverage']) is None else f'{cov:.4f}'}"
         ),
+        f"priceSources {summary['priceSources']}",
         f"totalPnl {summary['totalPnl']:.2f}",
         f"capitalDeployed {summary['capitalDeployed']:.2f}",
         f"returnOnDeployed {ret if ret is None else f'{ret:.4f}'}",
@@ -834,6 +930,8 @@ def _lotsFromTrades(trades: pl.DataFrame) -> list[Lot]:
                 exitPrice=None if row["exitPrice"] is None else float(row["exitPrice"]),
                 exitReason=row["exitReason"],
                 marked=bool(row["marked"]),
+                entryPriceSource=row.get("entryPriceSource"),
+                exitPriceSource=row.get("exitPriceSource"),
             )
         )
     return lots
@@ -848,6 +946,7 @@ def runRolling(
     endDate: date,
     stepMonths: int = 1,
     clusterMap: dict[str, str] | None = None,
+    quotes: pl.DataFrame | None = None,
 ) -> RollingResult:
     """Backtest each month with the accounts supplied for that window. No discovery."""
     windows = rollingWindows(startDate, endDate, stepMonths)
@@ -859,7 +958,9 @@ def runRolling(
         endMidnight = datetime(end.year, end.month, end.day, tzinfo=timezone.utc)
         endTs = endMidnight - timedelta(microseconds=1)
         accounts = [str(account) for account in byWindow.get(start, ())]
-        result = runBacktest(fills, markets, accounts, params, startTs, endTs, clusterMap)
+        result = runBacktest(
+            fills, markets, accounts, params, startTs, endTs, clusterMap, quotes=quotes
+        )
         windowRuns.append(
             WindowResult(
                 start=start,

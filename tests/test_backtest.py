@@ -214,6 +214,90 @@ def test_entryCoverageIsCompleteWhenEveryCopyIsPriced() -> None:
     assert result.summary["entryCoverage"] == pytest.approx(1.0)
 
 
+def quotesFrame(rows: list[dict]) -> pl.DataFrame:
+    return pl.DataFrame(
+        rows,
+        schema={"marketId": pl.String, "outcome": pl.String, "ts": pl.Datetime(time_unit="us", time_zone="UTC"),
+                "price": pl.Float64, "tokenId": pl.String},
+    )
+
+
+def test_aQuotePricesACopyTheTapeCouldNot() -> None:
+    """The whole point of the CLOB fetch: a market with no print inside the window
+    still gets a price, and the row says the price came from a quote."""
+    markets = marketsFrame([oneMarket("m", "event", "Yes", ts(10**6))])
+    fills = pl.DataFrame([buy("0xa", "m", 10, 0.40, 0)])
+    p = params(delaySec=30000)
+
+    tapeOnly = runBacktest(fills, markets, ["0xa"], p, ts(0), ts(10**6))
+    assert tapeOnly.trades.height == 0
+    assert tapeOnly.summary["noPriceSkips"]["entryAttempts"] == 1
+    assert tapeOnly.summary["priceSources"] == {"entryPrint": 0, "entryQuote": 0,
+                                               "exitPrint": 0, "exitQuote": 0}
+
+    quotes = quotesFrame([{"marketId": "m", "outcome": "Yes", "ts": ts(30000),
+                           "price": 0.44, "tokenId": "tokY"}])
+    priced = runBacktest(fills, markets, ["0xa"], p, ts(0), ts(10**6), quotes=quotes)
+    trade = priced.trades.row(0, named=True)
+    assert trade["entryPrice"] == pytest.approx(0.44)
+    assert trade["entryPriceSource"] == "quote"
+    assert trade["exitReason"] == "resolution"
+    assert trade["exitPriceSource"] is None  # a payoff, not a price source
+    assert priced.summary["noPriceSkips"]["entryAttempts"] == 0
+    assert priced.summary["priceSources"]["entryQuote"] == 1
+    assert priced.summary["priceSources"]["entryPrint"] == 0
+    assert priced.summary["entryCoverage"] == pytest.approx(1.0)
+    assert "priceSources" in formatSummary(priced)
+
+
+def test_aPrintStillWinsOverAQuote() -> None:
+    """Quotes fill gaps only. Where the tape has a print inside the window the print
+    prices the row, so every number computed before the fetch existed is unchanged."""
+    markets = marketsFrame([oneMarket("m", "event", "Yes", ts(10**6))])
+    fills = pl.DataFrame([buy("0xa", "m", 10, 0.40, 0)])
+    quotes = quotesFrame([{"marketId": "m", "outcome": "Yes", "ts": ts(0),
+                           "price": 0.99, "tokenId": "tokY"}])
+    priced = runBacktest(fills, markets, ["0xa"], params(delaySec=0), ts(0), ts(10**6),
+                         quotes=quotes)
+    trade = priced.trades.row(0, named=True)
+    assert trade["entryPrice"] == pytest.approx(0.40)
+    assert trade["entryPriceSource"] == "print"
+    assert priced.summary["priceSources"]["entryPrint"] == 1
+    assert priced.summary["priceSources"]["entryQuote"] == 0
+
+
+def test_exitPriceSourceIsRecorded() -> None:
+    markets = marketsFrame([oneMarket("m", "event", "Yes", ts(5000))])
+    fills = pl.DataFrame([buy("0xa", "m", 200, 0.40, 0),
+                          buy("0xa", "m", 200, 0.60, 100, side="SELL")])
+    quotes = quotesFrame([{"marketId": "m", "outcome": "Yes", "ts": ts(5000),
+                           "price": 0.11, "tokenId": "tokY"}])
+    result = runBacktest(fills, markets, ["0xa"],
+                         params(minNetUsd=50, exitMode="followCluster"),
+                         ts(0), ts(10**5), quotes=quotes)
+    trade = result.trades.row(0, named=True)
+    assert trade["exitReason"] == "followCluster"
+    assert trade["exitPrice"] == pytest.approx(0.60)
+    assert trade["exitPriceSource"] == "print"
+    assert result.summary["priceSources"]["exitPrint"] == 1
+
+
+def test_loadPricesConcatenatesRootsAndToleratesMissing(tmp_path) -> None:
+    from polycrawler.backtest import loadPrices
+
+    assert loadPrices([tmp_path]).height == 0  # no prices.parquet anywhere
+    rootA = tmp_path / "a"
+    rootB = tmp_path / "b"
+    for root, price in ((rootA, 0.4), (rootB, 0.6)):
+        root.mkdir()
+        quotesFrame([{"marketId": "m", "outcome": "Yes", "ts": ts(0),
+                      "price": price, "tokenId": "tokY"}]).write_parquet(
+            root / "prices.parquet")
+    merged = loadPrices([rootA, rootB])
+    assert merged.height == 1  # same (tokenId, ts) deduped, later root wins
+    assert merged["price"][0] == pytest.approx(0.6)
+
+
 def test_noPriceCountersSurviveAnEmptyRun() -> None:
     markets = marketsFrame([oneMarket("m", "event", "Yes", ts(10**6))])
     result = runBacktest(pl.DataFrame([buy("0xa", "m", 10, 0.40, 0)]).head(0), markets, [],

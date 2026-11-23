@@ -67,6 +67,50 @@ def test_priceAtUsesComplementAndGoesStale() -> None:
     assert got["before"] is None
 
 
+def test_priceAtFallsBackToQuotesAndNamesTheSource() -> None:
+    """A quote only prices a row the trade tape could not, and the row says which
+    source did it so the two populations can be reported apart."""
+    markets = marketsFrame(
+        [{"marketId": "m", "outcomes": ["Yes", "No"], "question": "m",
+          "winner": "Yes", "resolvedAt": ts(10**6)}]
+    )
+    fills = pl.DataFrame(
+        [{"ts": ts(0), "marketId": "m", "outcome": "Yes", "price": 0.55}]
+    )
+    tape = buildPriceTape(fills, markets)
+    quotes = pl.DataFrame(
+        [
+            {"ts": ts(0), "marketId": "m", "outcome": "Yes", "price": 0.53},
+            {"ts": ts(7 * 3600 - 60), "marketId": "m", "outcome": "Yes", "price": 0.90},
+            {"ts": ts(100), "marketId": "q", "outcome": "Yes", "price": 0.42},
+        ]
+    )
+    queries = pl.DataFrame(
+        {
+            "name": ["printed", "tapeStale", "neverTraded", "complement"],
+            "marketId": ["m", "m", "q", "m"],
+            "outcome": ["Yes", "Yes", "Yes", "No"],
+            "ts": [ts(0), ts(7 * 3600), ts(200), ts(0)],
+        }
+    )
+    got = {row["name"]: (row["price"], row["source"])
+           for row in priceAt(tape, queries, quotes=quotes).iter_rows(named=True)}
+    # a print inside the window still wins, even though a quote exists too
+    assert got["printed"] == (pytest.approx(0.55), "print")
+    # no print inside 6h, a quote inside it: priced, and labelled
+    assert got["tapeStale"] == (pytest.approx(0.90), "quote")
+    # nothing ever traded in this market: the quote is the only price there is
+    assert got["neverTraded"] == (pytest.approx(0.42), "quote")
+    # the complement of a print is still a print
+    assert got["complement"] == (pytest.approx(0.45), "print")
+    # with no quotes at all the old behaviour is unchanged, still labelled
+    plain = {row["name"]: (row["price"], row["source"])
+             for row in priceAt(tape, queries).iter_rows(named=True)}
+    assert plain["tapeStale"] == (None, None)
+    assert plain["neverTraded"] == (None, None)
+    assert plain["printed"] == (pytest.approx(0.55), "print")
+
+
 def test_aggregateEntriesClustersBuysWithinTenMinutes() -> None:
     t0 = ts(0)
     fills = pl.DataFrame(
