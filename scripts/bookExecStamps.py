@@ -38,6 +38,7 @@ FLOOR_MULT = 1.5          # takeable = asks priced <= 1.5x the alert ask
 FILL_TARGET_USD = 100.0   # pre-registered fill100 predicate (takeableUsd150)
 CAP_PER_RUN = 60          # bounded pass; remainder re-measured next tick
 API_GRACE_S = 3600        # transport failures within 1h stay unstamped (retry next tick)
+MAX_STAMP_LATENESS_S = 86400  # a day past the horizon the row is a replay, not a measurement
 
 FIELDNAMES = [
     "lane", "horizon", "alertTs", "account", "eventSlug", "outcome",
@@ -243,6 +244,7 @@ def runDue(root: Path, client: httpx.Client, now: datetime | None = None) -> dic
     closedCache: dict = {}
     perLane = {lane: 0 for lane in SIGNAL_FILES}
     apiLeft = 0
+    stale = 0
     pending: list[dict] = []
     for lane in SIGNAL_FILES:
         tokensForMid = laneCacheTokens(root, lane)
@@ -261,13 +263,25 @@ def runDue(root: Path, client: httpx.Client, now: datetime | None = None) -> dic
                     continue
                 if len(pending) >= CAP_PER_RUN:
                     appendStamps(stampsPath, pending)
-                    return {"stamped": perLane, "apiLeft": apiLeft, "capped": True}
+                    return {"stamped": perLane, "apiLeft": apiLeft, "capped": True,
+                            "stale": stale}
                 tokenId = tokensForMid.get(mid, {}).get((row.get("outcome") or "").strip())
                 if not tokenId:
                     tokensForMid[mid] = tokensForMid.get(mid) or gammaTokens(client, mid, gammaForgot)
                     tokenId = tokensForMid.get(mid, {}).get((row.get("outcome") or "").strip())
                 if not tokenId:
                     continue  # cannot resolve this alert yet; revisit next tick
+                if now.timestamp() - dueAt > MAX_STAMP_LATENESS_S:
+                    # A replay: the book at this moment is not the book at T+300s,
+                    # so retire it as stale instead of recording a fake measurement.
+                    rowOut = buildStampRow(row, lane, horizon, tokenId, {}, None,
+                                           False, now)
+                    rowOut["missReason"] = "stale"
+                    rowOut["fill100"] = "False"
+                    pending.append(rowOut)
+                    keys.add(key)
+                    stale += 1
+                    continue
                 try:
                     r = getWithRetry(client, f"{clobApi}/book",
                                      params={"token_id": tokenId})
@@ -297,7 +311,7 @@ def runDue(root: Path, client: httpx.Client, now: datetime | None = None) -> dic
                 keys.add(key)
                 perLane[lane] += 1
     appendStamps(stampsPath, pending)
-    return {"stamped": perLane, "apiLeft": apiLeft, "capped": False}
+    return {"stamped": perLane, "apiLeft": apiLeft, "capped": False, "stale": stale}
 
 
 def main() -> None:
@@ -307,10 +321,12 @@ def main() -> None:
         stats = runDue(ROOT, client)
     lanes = stats["stamped"]
     total = sum(lanes.values())
-    if total or stats["apiLeft"]:
+    stale = stats["stale"]
+    if total or stats["apiLeft"] or stale:
         parts = " ".join(f"{lane}={n}" for lane, n in lanes.items() if n)
         tail = f" apiLeft={stats['apiLeft']}" if stats["apiLeft"] else ""
-        print(f"execStamps: stamped {total} ({parts}){tail}"
+        retired = f" stale={stale}" if stale else ""
+        print(f"execStamps: stamped {total} ({parts}){tail}{retired}"
               f"{' capped; rest next tick' if stats['capped'] else ''}")
     else:
         print("execStamps: nothing due")

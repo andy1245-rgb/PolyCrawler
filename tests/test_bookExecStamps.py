@@ -226,8 +226,10 @@ def testApiErrorGraceThenTerminalStamp(tmp_path):
     addCache(root, "lane2", {"0xmm": {"Yes": "111"}})
     writeCsv(root / "data" / "live" / "signalsLane2.csv", SIG_FIELDS, [
         signalRow(mid="0xmm", alertTs="2026-10-01 12:04:00"),   # 60s past h300, in grace
+        # past the 1h grace but inside the lateness ceiling: still a measurement
+        # attempt, so a transport failure lands as a terminal api-error stamp
         signalRow(mid="0xmm", account="0xa",
-                  alertTs="2026-09-30 09:00:00"),               # deep past grace
+                  alertTs="2026-10-01 10:00:00"),
     ])
 
     def handler(request):
@@ -260,3 +262,65 @@ def testRunCapLeavesRestForNextTick(tmp_path, monkeypatch):
     assert final["capped"] is False and final["stamped"]["lane1"] == 0
     keySet = {(r["account"], r["horizon"]) for r in readStamps(root)}
     assert keySet == {(f"0x{i}", str(h)) for i in range(3) for h in (300, 600)}
+
+
+def testCeilingLeavesRoomForTheTerminalApiErrorPath():
+    """A ceiling at or below the retry grace would make the terminal api-error
+    stamp unreachable: every row past grace would be retired as stale first."""
+    assert bes.MAX_STAMP_LATENESS_S > bes.API_GRACE_S
+
+
+def testReplayIsRetiredAsStaleInsteadOfStamped(tmp_path):
+    """An alert detected days after the event is a replay. The book now is not the
+    book at T+300s, so the row is retired and labelled stale rather than recorded
+    as a measurement nobody should trust."""
+    root = tmp_path
+    (root / "data" / "live").mkdir(parents=True)
+    addCache(root, "lane1", {"0xmm": {"Yes": "111"}})
+    writeCsv(root / "data" / "live" / "signals.csv", SIG_FIELDS,
+             [signalRow(alertTs="2026-10-28 10:37:13")])
+    paths: list[str] = []
+
+    def handler(request):
+        paths.append(request.url.path)
+        if GAMMA in request.url.host:
+            return httpx.Response(200, json=[{"closed": False, "active": True}])
+        return httpx.Response(200, json={"asks": [{"price": "0.61", "size": "300"}],
+                                         "bids": [{"price": "0.59", "size": "200"}]})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    now = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    run = bes.runDue(root, client, now=now)
+
+    assert run["stale"] == 2          # both horizons
+    assert run["stamped"]["lane1"] == 0
+    rows = readStamps(root)
+    assert [r["horizon"] for r in rows] == ["300", "600"]
+    assert all(r["missReason"] == "stale" for r in rows)
+    assert all(r["fill100"] == "False" for r in rows)
+    assert all(r["askNow"] == "" and r["bidNow"] == "" for r in rows)
+    assert all(int(r["stampDrivenS"]) > bes.MAX_STAMP_LATENESS_S for r in rows)
+    # the book was never asked for: a stale row must not become a measurement
+    assert not any("/book" in path for path in paths)
+    # and it is retired once, not retried forever
+    again = bes.runDue(root, client, now=now)
+    assert again["stale"] == 0 and again["stamped"]["lane1"] == 0
+    assert len(readStamps(root)) == 2
+
+
+def testRowInsideTheCeilingStillStamps(tmp_path):
+    """Two hours late is a late measurement, not a replay: it still stamps, and the
+    row records how late it was in stampDrivenS."""
+    root = tmp_path
+    (root / "data" / "live").mkdir(parents=True)
+    addCache(root, "lane1", {"0xmm": {"Yes": "111"}})
+    writeCsv(root / "data" / "live" / "signals.csv", SIG_FIELDS,
+             [signalRow(alertTs="2026-11-01 10:00:00")])
+    now = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    run = bes.runDue(root, okClient(), now=now)
+    assert run["stale"] == 0
+    assert run["stamped"]["lane1"] == 2
+    rows = readStamps(root)
+    assert all(r["missReason"] == "ok" for r in rows)
+    assert all(r["askNow"] != "" for r in rows)
+    assert all(int(r["stampDrivenS"]) <= bes.MAX_STAMP_LATENESS_S for r in rows)
