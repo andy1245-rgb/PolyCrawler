@@ -12,6 +12,7 @@ import csv
 import importlib.util
 import json
 import sys
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -442,3 +443,46 @@ def test_row_maps_by_name_not_by_position(tmp_path):
     cells = list(csv.reader(path.open()))[1]
     byName = dict(zip(pl.L2_FIELDNAMES, row))
     assert cells == [byName["takeableShares"], byName["alertTs"]]
+
+
+def test_concurrent_writers_cannot_double_the_header(tmp_path, monkeypatch):
+    """appendCsv reads the header and then appends. Two writers that both see a
+    missing file would both write one, leaving a header mid-book. The lock makes the
+    read and the write indivisible; readHeader is slowed here so the window is wide
+    enough for the race to lose deterministically without it."""
+    path = tmp_path / "data" / "live" / "signals.csv"
+    path.parent.mkdir(parents=True)
+    real = pl.readHeader
+
+    def slowReadHeader(target):
+        time.sleep(0.02)
+        return real(target)
+
+    monkeypatch.setattr(pl, "readHeader", slowReadHeader)
+    row = [f"c{i}" for i in range(len(pl.L2_FIELDNAMES))]
+
+    threads = [threading.Thread(target=pl.appendCsv,
+                               args=(path, pl.L2_FIELDNAMES, row)) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    lines = [line for line in path.read_text().splitlines() if line.strip()]
+    headers = [line for line in lines if line.split(",") == pl.L2_FIELDNAMES]
+    assert len(headers) == 1
+    assert len(lines) == 1 + 8
+    assert pl.lockPathFor(path).name == "signals.csv.lock"
+    assert pl.lockPathFor(path).exists()
+
+
+def test_writer_still_works_without_flock(tmp_path, monkeypatch):
+    """Windows has no fcntl; the writer must degrade to the unlocked path rather
+    than raise."""
+    monkeypatch.setattr(pl, "fcntl", None)
+    path = tmp_path / "noflock.csv"
+    row = [f"c{i}" for i in range(len(pl.L2_FIELDNAMES))]
+    assert pl.appendCsv(path, pl.L2_FIELDNAMES, row) is True
+    lines = path.read_text().splitlines()
+    assert len(lines) == 2
+    assert lines[0].split(",") == pl.L2_FIELDNAMES

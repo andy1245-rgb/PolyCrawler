@@ -36,11 +36,18 @@ import csv
 import json
 import time
 from collections import deque
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Iterator
 
 import httpx
 import yaml
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows has no flock
+    fcntl = None
 
 gammaApi = "https://gamma-api.polymarket.com"
 dataApi = "https://data-api.polymarket.com"
@@ -150,6 +157,33 @@ def readHeader(path: Path) -> list[str] | None:
 WARNED_SCHEMA: set[str] = set()
 
 
+def lockPathFor(path: Path) -> Path:
+    return path.with_name(path.name + ".lock")
+
+
+@contextmanager
+def bookLock(path: Path) -> Iterator[None]:
+    """Exclusive advisory lock on `<path>.lock` around read-header-then-append.
+
+    The append is one write, but appendCsv picks the row width from the header it
+    just read, so two writers that both see a missing file would both write a
+    header and the book would be a header mid-file. Holding the lock across the
+    read and the write makes the pair indivisible. The lock file sits next to the
+    book and is never read as data.
+    """
+    if fcntl is None:  # pragma: no cover - Windows has no flock
+        yield
+        return
+    lockPath = lockPathFor(path)
+    lockPath.parent.mkdir(parents=True, exist_ok=True)
+    with lockPath.open("a+") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def warnSchemaOnce(path: Path, header: list[str], fieldnames: list[str]) -> None:
     missing = [name for name in fieldnames if name not in header]
     extra = [name for name in header if name not in fieldnames]
@@ -172,22 +206,23 @@ def appendCsv(path: Path, fieldnames: list[str], row: list) -> bool:
     which is worse than being a column behind.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    header = readHeader(path)
-    byName = dict(zip(fieldnames, row))
-    if header is None:
+    with bookLock(path):
+        header = readHeader(path)
+        byName = dict(zip(fieldnames, row))
+        if header is None:
+            with path.open("a", newline="") as fh:
+                writer = csv.writer(fh)
+                writer.writerow(fieldnames)
+                writer.writerow([byName.get(name, "") for name in fieldnames])
+            return True
+        if header == fieldnames:
+            with path.open("a", newline="") as fh:
+                csv.writer(fh).writerow([byName.get(name, "") for name in fieldnames])
+            return True
+        warnSchemaOnce(path, header, fieldnames)
         with path.open("a", newline="") as fh:
-            writer = csv.writer(fh)
-            writer.writerow(fieldnames)
-            writer.writerow([byName.get(name, "") for name in fieldnames])
-        return True
-    if header == fieldnames:
-        with path.open("a", newline="") as fh:
-            csv.writer(fh).writerow([byName.get(name, "") for name in fieldnames])
-        return True
-    warnSchemaOnce(path, header, fieldnames)
-    with path.open("a", newline="") as fh:
-        csv.writer(fh).writerow([byName.get(name, "") for name in header])
-    return False
+            csv.writer(fh).writerow([byName.get(name, "") for name in header])
+        return False
 
 
 def appendRow(root: Path, name: str, fieldnames: list[str], row: list) -> bool:
