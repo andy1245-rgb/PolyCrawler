@@ -130,7 +130,9 @@ def test_priceHistoryRowsMatchTheSchema():
     frame = pl.DataFrame(rows, schema=priceHistorySchema)
     assert frame.columns == list(priceHistorySchema)
     assert frame.height == 2
-    assert priceDedupeKeys == ["tokenId", "ts"]
+    # keyed on what priceAt joins on, so a token under two market labels
+    # cannot lose one of them
+    assert priceDedupeKeys == ["marketId", "outcome", "ts"]
 
 
 def fillsRow():

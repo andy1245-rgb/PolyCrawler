@@ -61,7 +61,9 @@ priceHistorySchema = {
     "price": pl.Float64,
     "tokenId": pl.String,
 }
-priceDedupeKeys = ["tokenId", "ts"]
+# Keyed on the columns priceAt joins on, not on tokenId: a token that
+# ever appears under two market labels would otherwise lose one of them.
+priceDedupeKeys = ["marketId", "outcome", "ts"]
 clobApi = "https://clob.polymarket.com"
 priceFidelityMin = 60
 priceWorkers = 8

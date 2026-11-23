@@ -143,6 +143,25 @@ def _emptyQuotes() -> pl.DataFrame:
     )
 
 
+def quotesHash(quotes: pl.DataFrame | None) -> str | None:
+    """Fingerprint of the quote tape a run priced against.
+
+    `paramsHash` covers strategy params only, so without this a run directory
+    cannot tell a tape-priced run from a quote-priced one, and writing the second
+    would overwrite the first with different numbers under the same id.
+    """
+    if quotes is None or quotes.height == 0:
+        return None
+    payload = quotes.select("marketId", "outcome", "ts", "price").sort(
+        ["marketId", "outcome", "ts"]
+    )
+    digest = hashlib.sha256()
+    digest.update(str(payload.height).encode())
+    for value in payload.hash_rows().to_list():
+        digest.update(str(value).encode())
+    return digest.hexdigest()[:12]
+
+
 def loadPrices(dataDirs: Sequence[str | Path]) -> pl.DataFrame:
     """Concatenate data/prices.parquet from every data root that has one.
 
@@ -156,8 +175,10 @@ def loadPrices(dataDirs: Sequence[str | Path]) -> pl.DataFrame:
             frames.append(pl.read_parquet(path))
     if not frames:
         return _emptyQuotes()
+    # Dedupe on what priceAt joins on. Later roots win, which is the configured
+    # order of fetch.dataDirs.
     return pl.concat(frames, how="diagonal_relaxed").unique(
-        subset=["tokenId", "ts"], keep="last"
+        subset=["marketId", "outcome", "ts"], keep="last"
     )
 
 
@@ -168,6 +189,7 @@ class Prepared:
     startTs: datetime
     endTs: datetime
     quotes: pl.DataFrame = field(default_factory=lambda: _emptyQuotes())
+    quotesHash: str | None = None
 
 
 @dataclass
@@ -273,12 +295,14 @@ def prepareBacktest(
         )
     else:
         path = _attachMarkets(path, markets)
+    resolvedQuotes = _emptyQuotes() if quotes is None else quotes
     return Prepared(
         path=path,
         tape=tape,
         startTs=startTs,
         endTs=endTs,
-        quotes=_emptyQuotes() if quotes is None else quotes,
+        quotes=resolvedQuotes,
+        quotesHash=quotesHash(resolvedQuotes),
     )
 
 
@@ -355,6 +379,7 @@ def _blankSummary(startTs: datetime, endTs: datetime, digest: str) -> dict:
         "noPriceSkips": noPriceCounts(),
         "entryCoverage": None,
         "priceSources": priceSourceCounts(),
+        "quotesHash": None,
         "startTs": startTs.isoformat(),
         "endTs": endTs.isoformat(),
         "paramsHash": digest,
@@ -790,11 +815,13 @@ def runPrepared(
 ) -> BacktestResult:
     digest = paramsHash(params)
     lots, noPrice = _replay(prepared, params, priceCache)
+    summary = _summarize(lots, prepared.startTs, prepared.endTs, digest, noPrice)
+    summary["quotesHash"] = prepared.quotesHash
     return BacktestResult(
         params=params,
         paramsHash=digest,
         trades=_tradesFrame(lots),
-        summary=_summarize(lots, prepared.startTs, prepared.endTs, digest, noPrice),
+        summary=summary,
     )
 
 
@@ -822,6 +849,19 @@ def runBacktest(
 
 def writeRun(result: BacktestResult, runsDir: str | Path = "runs") -> Path:
     out = Path(runsDir) / result.paramsHash
+    existing = out / "summary.json"
+    if existing.exists():
+        try:
+            previous = json.loads(existing.read_text()).get("quotesHash")
+        except (OSError, ValueError):
+            previous = None
+        if previous != result.summary.get("quotesHash"):
+            raise ValueError(
+                f"{out} already holds a run priced against quotesHash={previous!r}; "
+                f"this run used {result.summary.get('quotesHash')!r}. Same strategy "
+                "params, different prices: move the old run aside, or fetch without "
+                "prices to reproduce it."
+            )
     out.mkdir(parents=True, exist_ok=True)
     payload = result.params.model_dump(mode="json")
     (out / "params.yaml").write_text(yaml.safe_dump(payload, sort_keys=True))

@@ -30,13 +30,14 @@ def fetch(
     setOverrides: Annotated[list[str] | None, typer.Option("--set")] = None,
     eventSlug: Annotated[list[str] | None, typer.Option("--event-slug")] = None,
     refresh: Annotated[bool, typer.Option("--refresh")] = False,
+    prices: Annotated[bool, typer.Option("--prices/--no-prices")] = True,
 ) -> None:
-    """Download markets and fills into data/."""
+    """Download markets, fills and CLOB price history into data/."""
     loaded = loadConfig(config, setOverrides or [])
     usingSlugs = eventSlug if eventSlug else loaded.fetch.eventSlugs
     if not usingSlugs:
         typer.echo(f"no event slugs; fetching tags {', '.join(loaded.fetch.marketTags)}")
-    summary = runFetch(loaded, eventSlugs=eventSlug, refresh=refresh)
+    summary = runFetch(loaded, eventSlugs=eventSlug, refresh=refresh, prices=prices)
     typer.echo(f"markets {summary.markets}")
     typer.echo(f"fills {summary.fills}")
     typer.echo(f"accounts {summary.accounts}")

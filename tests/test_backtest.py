@@ -282,6 +282,55 @@ def test_exitPriceSourceIsRecorded() -> None:
     assert result.summary["priceSources"]["exitPrint"] == 1
 
 
+def test_summaryRecordsWhichPriceTapeItUsed() -> None:
+    """paramsHash covers strategy params only, so the summary has to name the quotes:
+    otherwise a tape-priced run and a quote-priced run of the same config are
+    indistinguishable after the fact."""
+    markets = marketsFrame([oneMarket("m", "event", "Yes", ts(10**6))])
+    fills = pl.DataFrame([buy("0xa", "m", 10, 0.40, 0)])
+    p = params(delaySec=30000)
+    q1 = quotesFrame([{"marketId": "m", "outcome": "Yes", "ts": ts(30000),
+                       "price": 0.44, "tokenId": "t"}])
+    q2 = quotesFrame([{"marketId": "m", "outcome": "Yes", "ts": ts(30000),
+                       "price": 0.55, "tokenId": "t"}])
+    tapeOnly = runBacktest(fills, markets, ["0xa"], p, ts(0), ts(10**6))
+    withQuotes = runBacktest(fills, markets, ["0xa"], p, ts(0), ts(10**6), quotes=q1)
+    other = runBacktest(fills, markets, ["0xa"], p, ts(0), ts(10**6), quotes=q2)
+    assert tapeOnly.summary["quotesHash"] is None
+    assert withQuotes.summary["quotesHash"]
+    assert withQuotes.summary["quotesHash"] != other.summary["quotesHash"]
+
+
+def test_writeRunRefusesToOverwriteADifferentPriceTape(tmp_path) -> None:
+    """Runs are the research artifact. The same params read from a different quote
+    tape would land in the same directory under the same id with different numbers."""
+    from polycrawler.backtest import writeRun
+
+    markets = marketsFrame([oneMarket("m", "event", "Yes", ts(10**6))])
+    fills = pl.DataFrame([buy("0xa", "m", 10, 0.40, 0)])
+    p = params(delaySec=30000)
+    q1 = quotesFrame([{"marketId": "m", "outcome": "Yes", "ts": ts(30000),
+                       "price": 0.44, "tokenId": "t"}])
+    q2 = quotesFrame([{"marketId": "m", "outcome": "Yes", "ts": ts(30000),
+                       "price": 0.55, "tokenId": "t"}])
+
+    first = runBacktest(fills, markets, ["0xa"], p, ts(0), ts(10**6), quotes=q1)
+    writeRun(first, tmp_path)
+    assert (tmp_path / first.paramsHash / "summary.json").exists()
+
+    # the same tape and params rewrite the same run without complaint
+    writeRun(runBacktest(fills, markets, ["0xa"], p, ts(0), ts(10**6), quotes=q1), tmp_path)
+
+    second = runBacktest(fills, markets, ["0xa"], p, ts(0), ts(10**6), quotes=q2)
+    with pytest.raises(ValueError, match="different prices"):
+        writeRun(second, tmp_path)
+
+    # a tape-only run of the same params is also a different experiment
+    tapeOnly = runBacktest(fills, markets, ["0xa"], p, ts(0), ts(10**6))
+    with pytest.raises(ValueError, match="different prices"):
+        writeRun(tapeOnly, tmp_path)
+
+
 def test_loadPricesConcatenatesRootsAndToleratesMissing(tmp_path) -> None:
     from polycrawler.backtest import loadPrices
 

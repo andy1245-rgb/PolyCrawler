@@ -8,7 +8,13 @@ from pathlib import Path
 
 import polars as pl
 
-from polycrawler.backtest import BacktestParams, dirsFromConfig, loadInputs, prepareBacktest
+from polycrawler.backtest import (
+    BacktestParams,
+    dirsFromConfig,
+    loadInputs,
+    loadPrices,
+    prepareBacktest,
+)
 from polycrawler.config import loadConfig
 from polycrawler.sweep import formatSweep, loadSweep, runSweep, writeSweep
 
@@ -37,7 +43,10 @@ def main() -> None:
     startTs = datetime(
         loaded.splitDate.year, loaded.splitDate.month, loaded.splitDate.day, tzinfo=timezone.utc
     )
-    prepared = prepareBacktest(fills, markets, accounts, startTs, endTs, clusterMap)
+    prepared = prepareBacktest(
+        fills, markets, accounts, startTs, endTs, clusterMap,
+        quotes=loadPrices(dirs),
+    )
     ranked = runSweep(prepared, params, spec.grid, spec.objective, spec.minTrades, spec.minEvents)
     out = writeSweep(ranked, spec.name, root / args.runs_dir)
     kept = int(ranked.filter(pl.col("eligible")).height) if ranked.height else 0

@@ -238,10 +238,12 @@ def _attachPrice(frame: pl.DataFrame, series: pl.DataFrame, stale: timedelta,
     """As-of join one tape onto the queries, land the price under `name`."""
     if series.height == 0:
         return frame.with_columns(pl.lit(None, dtype=pl.Float64).alias(name))
-    right = series.select("marketId", "outcome", "ts", "price").sort(
-        ["marketId", "outcome", "ts"]
-    )
-    joined = frame.sort(["marketId", "outcome", "ts"]).join_asof(
+    # Alias the right-hand price before the join. Reading "price" afterwards would
+    # silently pick the caller's own column if the query frame happened to carry one.
+    right = series.select(
+        "marketId", "outcome", "ts", pl.col("price").alias(name)
+    ).sort(["marketId", "outcome", "ts"])
+    return frame.sort(["marketId", "outcome", "ts"]).join_asof(
         right,
         on="ts",
         by=["marketId", "outcome"],
@@ -249,7 +251,6 @@ def _attachPrice(frame: pl.DataFrame, series: pl.DataFrame, stale: timedelta,
         tolerance=stale,
         check_sortedness=False,
     )
-    return joined.with_columns(pl.col("price").alias(name)).drop("price")
 
 
 def priceAt(
