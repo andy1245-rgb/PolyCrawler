@@ -1,5 +1,6 @@
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -139,7 +140,25 @@ def fetchPrices(
         )
         for _marketId, _outcome, token in targets
     ]
-    payloads = session.fetchMany(requests, maxWorkers=priceWorkers)
+
+    def one(request: JsonRequest) -> Any:
+        # Prices are an enrichment of the fill fetch, never a precondition for it:
+        # one delisted token or one 429 must not cost the markets and fills.
+        try:
+            return session.getJson(
+                request.url, request.params, request.cacheKind, request.cacheKey,
+                request.refresh,
+            )
+        except Exception:  # noqa: BLE001 - per-token boundary, counted below
+            return None
+
+    workers = max(1, min(priceWorkers, len(requests)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        payloads = list(pool.map(one, requests))
+    missed = sum(1 for payload in payloads if payload is None)
+    if missed:
+        print(f"prices: {missed} of {len(requests)} tokens returned no history",
+              flush=True)
     rows: list[dict[str, Any]] = []
     for (marketId, outcome, token), payload in zip(targets, payloads):
         rows.extend(normalizePriceHistory(payload, marketId, outcome, token))
