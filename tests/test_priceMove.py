@@ -111,6 +111,35 @@ def test_priceAtFallsBackToQuotesAndNamesTheSource() -> None:
     assert plain["printed"] == (pytest.approx(0.55), "print")
 
 
+def test_priceAtKeepsDuplicateQueryRowsAligned() -> None:
+    """_prices queries once per fill row, and the same (market, outcome, ts+delay)
+    repeats constantly across rows. Every duplicate must keep its own price and the
+    caller's row order must survive the sort inside the as-of join."""
+    markets = marketsFrame(
+        [{"marketId": "m", "outcomes": ["Yes", "No"], "question": "m",
+          "winner": None, "resolvedAt": None},
+         {"marketId": "n", "outcomes": ["Yes", "No"], "question": "n",
+          "winner": None, "resolvedAt": None}]
+    )
+    fills = pl.DataFrame(
+        [{"ts": ts(0), "marketId": "m", "outcome": "Yes", "price": 0.20},
+         {"ts": ts(0), "marketId": "n", "outcome": "Yes", "price": 0.80}]
+    )
+    tape = buildPriceTape(fills, markets)
+    queries = pl.DataFrame(
+        {
+            "rowId": [0, 1, 2, 3, 4],
+            "marketId": ["n", "m", "m", "n", "m"],
+            "outcome": ["Yes", "Yes", "Yes", "Yes", "No"],
+            "ts": [ts(0), ts(0), ts(0), ts(0), ts(0)],
+        }
+    )
+    got = list(priceAt(tape, queries).iter_rows(named=True))
+    assert [row["rowId"] for row in got] == [0, 1, 2, 3, 4]  # caller order kept
+    assert [round(row["price"], 6) for row in got] == [0.80, 0.20, 0.20, 0.80, 0.80]
+    assert [row["source"] for row in got] == ["print"] * 5
+
+
 def test_aggregateEntriesClustersBuysWithinTenMinutes() -> None:
     t0 = ts(0)
     fills = pl.DataFrame(
