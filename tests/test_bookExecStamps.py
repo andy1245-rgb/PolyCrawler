@@ -11,7 +11,7 @@ tmp roots; the watcher's own data files are never touched.
 import csv
 import json
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -324,3 +324,25 @@ def testRowInsideTheCeilingStillStamps(tmp_path):
     assert all(r["missReason"] == "ok" for r in rows)
     assert all(r["askNow"] != "" for r in rows)
     assert all(int(r["stampDrivenS"]) <= bes.MAX_STAMP_LATENESS_S for r in rows)
+
+
+def runForLateness(tmp_path, hoursLate: float, label: str):
+    root = tmp_path / label
+    (root / "data" / "live").mkdir(parents=True)
+    addCache(root, "lane1", {"0xmm": {"Yes": "111"}})
+    due = datetime(2026, 11, 1, 12, 0, tzinfo=UTC)
+    alert = due - timedelta(hours=hoursLate)
+    writeCsv(root / "data" / "live" / "signals.csv", SIG_FIELDS,
+             [signalRow(alertTs=alert.strftime("%Y-%m-%d %H:%M:%S"))])
+    return bes.runDue(root, okClient(), now=due)
+
+
+def testCeilingScaleIsAboutADay(tmp_path):
+    """Pin the ceiling's magnitude without pinning the literal, so raising it later
+    is a deliberate act rather than a silent one. Twenty hours late is still a
+    measurement; thirty hours is a replay."""
+    near = runForLateness(tmp_path, 20, "near")
+    assert near["stamped"]["lane1"] == 2 and near["stale"] == 0
+
+    far = runForLateness(tmp_path, 30, "far")
+    assert far["stamped"]["lane1"] == 0 and far["stale"] == 2

@@ -40,6 +40,18 @@ lane 2 `data/live/signalsLane2.csv`, lane 3 `data/live/signalsLane3.csv`):
   | `book-closed` | both sides empty AND gamma reports the market closed/resolved |
   | `dead-market` | both sides empty, market open, no quotes (book-closed's open twin) |
   | `api-error` | retries exhausted — see retry rule; left unstamped within the grace window |
+  | `stale` | the alert was detected more than `MAX_STAMP_LATENESS_S` (24h) past its due
+    time, so the book now is not the book at T+300s. No book is pulled, no price is
+    recorded (`askNow` and both `takeableUsd` columns empty/zero), the row is terminal
+    on first sight, and it is counted in the run's `stale` total, not in `stamped` |
+
+  `stale` is a seventh value, added after this note was first written. It exists
+  because a replayed alert had no upper bound: a burst detected days late used to be
+  *measured* and recorded as a T+300s observation, which put fabricated in-window
+  rows into the analysis. Stale rows carry `stampDrivenS > 86400`, so the `≤3600`
+  bucket rule below already excludes them. They are terminal on purpose: raising the
+  ceiling later does not resurrect them, because the append-once key is already
+  written. Treat `missReason` as the discriminator, never the mere presence of a row.
 - **`suspect` (dataQuality)** = `no-prints-never`: when the book is unusable
   (book-empty / dead-market / book-closed), `clob /last-trade-price` is probed; a 404
   or price ≤ 0 marks the market as having no prints ever — such stamps are
