@@ -101,7 +101,7 @@ running average, the shipped backtester at fill + 30 s. 167 entries become 137, 
 
 The live lanes grade the same way, from floors fixed before any lane data existed: lane 2, the
 T+7d horizon book, needs 8 closes before its gate may speak, and lane 3, the favourite/mid burst
-book, 20. Under those floors both return `INCONCLUSIVE-THIN (n=…)` rather than a PASS or a FAIL
+book, 20. Under those floors both return `INCONCLUSIVE-THIN` rather than a PASS or a FAIL
 (`gate2`, `gate3` in `scripts/laneWeekly.py`); neither is a result yet, and no count from those
 gitignored books is quoted here.
 
