@@ -9,8 +9,8 @@ rule falsified on a holdout than drawn on a chart.
 
 ## What it does
 
-Four commands, one step each of the same pipeline. Between them there is nothing but Parquet on
-disk, so any step can be rerun without repeating the one before it.
+Four commands, one step each of the same pipeline. They communicate through Parquet on disk, so any
+step can be rerun without repeating the one before it.
 
 | Command | Input | Output |
 |---|---|---|
@@ -126,8 +126,8 @@ uv run pc2 discover --config configs/oosExpansionDiscover.yaml
 uv run pc2 backtest --config configs/militaryBacktest.yaml
 ```
 
-Every config value can be overridden per invocation with `--set`, which is how one grid cell is
-expressed without editing a file:
+`pc2 fetch`, `pc2 discover` and `pc2 backtest` each take `--set` overrides, so a variant of a config
+can be run without editing it — which is how a single grid cell is expressed:
 
 ```bash
 uv run pc2 backtest --config configs/militaryBacktest.yaml --set strategy.delaySec=60
@@ -169,9 +169,12 @@ covered by [`tests/test_prices_history.py`](tests/test_prices_history.py).
 
 ## What it does not do
 
-- **It does not ship its data.** No Parquet, no run directory, no log is tracked. A clone can read
-  the code, run the suite, and fetch a corpus; it cannot reproduce a published count without doing
-  the fetch first.
+- **It does not ship its data, and it cannot audit itself from a clone.** No Parquet, no run
+  directory, no log is tracked, and the paper-lane books under `data/live` were partly reconstructed
+  by replay. A clone reads the code, runs the suite and fetches a corpus; it cannot reproduce a
+  published count without doing the fetch, and §9 of
+  [`docs/paper-lane-records.md`](docs/paper-lane-records.md) is where the trustworthy live rows are
+  separated from the rest.
 - **It does not claim an edge.** The rule that won in-sample lost on the holdout, and the cluster
   strategy had nothing to copy there at all: 0 clusters from 14 flagged accounts. No configuration
   in this repository has passed an out-of-sample test.
@@ -184,9 +187,6 @@ covered by [`tests/test_prices_history.py`](tests/test_prices_history.py).
 - **It does not cover more than one venue, one chain, or two outcomes.** Markets come from
   Polymarket, funding from Polygon collateral transfers, and the synthetic complement `1 − p` is
   only valid for two-outcome markets.
-- **It cannot audit its own live books from a clone.** The paper-lane books under `data/live` are
-  untracked and were partly reconstructed by replay; §9 above states which rows are trustworthy and
-  §10 the rebuild that clears the rest.
 
 Two dead knobs remain in the config model: `minCoTradeMarkets` is declared and read by nothing, and
 three result-changing constants — the 10-minute burst window, the 6-hour staleness window and the
