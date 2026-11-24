@@ -21,12 +21,17 @@ step can be rerun without repeating the one before it.
 
 `pc2 fetch` prints four lines as it lands — `markets`, `fills`, `accounts`, `prices` — the last
 counting quote rows the CLOB pull returned; `--no-prices` skips that step, two requests per market.
+That pull is why a market nobody traded inside the six-hour window still prices at all: `fetchPrices`
+in `src/polycrawler/fetch.py` writes `prices.parquet`, and `priceAt` in `src/polycrawler/priceMove.py`
+consults it only where the trade tape has nothing.
 
 A backtest prints a summary whose first lines decide whether the rest of it means anything:
 `noPriceSkips` counts entry attempts, exit attempts and open positions that found no price, and
 `entryCoverage` the share of copy attempts that did; a copy that cannot be priced is counted, never
 dropped. `priceSources` reports those four cases apart — `entryPrint`, `entryQuote`, `exitPrint`,
 `exitQuote` — so a run priced from a CLOB quote reads separately from one priced from a trade print.
+The two are not the same evidence — a print is what a trader paid, a quote is what the book was
+showing — so a result leaning on quotes is a claim about the tape, not about fills.
 
 Here is the shipped backtest path replayed over the holdout tape, command and output as they came:
 
@@ -54,6 +59,12 @@ events 30
 
 The real output ends with one further line naming the run directory it wrote. The tape that command
 read is not in this repository — see [Quickstart](#quickstart) for what fetching one takes.
+
+Two more guarantees live in `scripts/`, where the live books are written. `scripts/bookExecStamps.py`
+retires an alert more than `MAX_STAMP_LATENESS_S` (24h) past its due time as `missReason=stale`, no
+price recorded, so a replay noticed days late counts as a skip instead of becoming the T+300s book.
+`bookLock` in `scripts/paperLanes.py` holds an exclusive `flock` on `<book>.lock` across the header
+read and the append after it, so two writers cannot both see a missing file and write a header.
 
 ## The measured result, and what it is worth
 
@@ -87,6 +98,12 @@ Neither number is a bug report. Both are the point. What is behind each one:
 The last two rows are the same tape graded by two entry rules: the sweep prices entry at the burst's
 running average, the shipped backtester at fill + 30 s. 167 entries become 137, −0.727 becomes
 −0.718, and the verdict does not move.
+
+The live lanes grade the same way, from floors fixed before any lane data existed: lane 2, the
+T+7d horizon book, needs 8 closes before its gate may speak, and lane 3, the favourite/mid burst
+book, 20. Under those floors both return `INCONCLUSIVE-THIN (n=…)` rather than a PASS or a FAIL
+(`gate2`, `gate3` in `scripts/laneWeekly.py`); neither is a result yet, and no count from those
+gitignored books is quoted here.
 
 A count is only as good as its key. [`docs/paper-lane-records.md`](docs/paper-lane-records.md) §5
 records a dedupe keyed on the alert timestamp alone which saw **22 of 72 alert rows**: timestamps
@@ -136,18 +153,16 @@ uv run pc2 backtest --config configs/militaryBacktest.yaml --set strategy.delayS
 ## How it was measured
 
 Discovery reads only data before `splitDate` and the backtest only trades after it, so the split is
-what keeps the two apart. Entry is priced from the last trade print at or before
-`fill + delaySec` inside a six-hour staleness window; when no print falls inside that window the CLOB
-price-history tape is consulted instead and the row is tagged `quote`, so the two populations are
-reported apart rather than blended. A copy that finds neither is counted in `noPriceSkips`. Prices
-come from the tape or the CLOB, never from a midpoint, so a quote-priced row is a published price at
-a published time rather than a guess at a fill.
+what keeps the two apart. Entry is priced from the last trade print at or before `fill + delaySec`
+inside a six-hour staleness window; when no print falls inside it the CLOB price-history tape is
+consulted instead and the row is tagged `quote`. A copy that finds neither is counted in
+`noPriceSkips`. Prices come from the tape or the CLOB, never from a midpoint, so a quote-priced row is
+a published price at a published time rather than a guess at a fill.
 
 A run also identifies the tape it priced against. `paramsHash` covers strategy parameters only, so
-two runs of one config over two price universes would have shared a run directory and the second
-would have overwritten the first with different numbers. `runs/<hash>/summary.json` now carries a
-`quotesHash` over the quote rows, and `writeRun` refuses to overwrite a run whose `quotesHash`
-differs.
+two runs of one config over two price universes shared a run directory and the second overwrote the
+first with different numbers. `runs/<hash>/summary.json` now carries a `quotesHash` over the quote
+rows, and `writeRun` refuses to overwrite a run whose `quotesHash` differs.
 
 The holdout was built to be one: 200 slugs crawled from Gamma by tag, filtered through the same
 15-keyword roster the in-sample work used, resolved-only, volume ≥ $20k, and asserted to have zero
