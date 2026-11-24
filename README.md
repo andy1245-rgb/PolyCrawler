@@ -1,85 +1,104 @@
 # PolyCrawler
 
-Backtest-first research tool for Polymarket: find insider-style wallet clusters from past data,
-then ask whether copying them afterwards survives a realistic delay. For researchers and traders
-who would rather see a claim falsified than a chart.
+Backtest-first research on Polymarket: find wallets that look informed in past data, then test
+whether copying them afterwards survives a realistic delay. For researchers who would rather see a
+rule falsified on a holdout than drawn on a chart.
 
 [![Licence: Apache 2.0](https://img.shields.io/badge/licence-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](pyproject.toml)
 
 ## What it does
 
-Four commands, each a step of the same pipeline. Nothing between them but Parquet on disk, so a
-step can be rerun without repeating the one before it.
+Four commands, one step each of the same pipeline. Between them there is nothing but Parquet on
+disk, so any step can be rerun without repeating the one before it.
 
 | Command | Input | Output |
 |---|---|---|
-| `pc2 fetch` | event slugs or tag/volume filters in a YAML config | `data/markets.parquet`, `fills.parquet`, `prices.parquet`, plus a raw-JSON cache |
-| `pc2 discover` | the fills, before `splitDate` | `suspicious.parquet`, `funding.parquet`, `origins.parquet`, `parents.parquet`, `clusterAccounts.parquet` |
-| `pc2 backtest` | fills after `splitDate` + a strategy config | `runs/<hash>/` — `params.yaml`, `summary.json`, `trades.parquet` |
-| `pc2 sweep` | a grid of backtest configs | a ranked table over the grid |
+| `pc2 fetch` | event slugs, or tag and volume filters, from a YAML config | `data/markets.parquet`, `data/fills.parquet`, `data/prices.parquet`, plus a raw-JSON cache |
+| `pc2 discover` | the fills before `splitDate` | `data/suspicious.parquet`, `data/funding.parquet`, `data/origins.parquet`, `data/parents.parquet`, `data/clusterAccounts.parquet` |
+| `pc2 backtest` | the fills after `splitDate`, plus a strategy config | `runs/<hash>/params.yaml`, `runs/<hash>/summary.json`, `runs/<hash>/trades.parquet` |
+| `pc2 sweep` | a grid of backtest configs | a ranked table over the grid, written under `runs/` |
 
-A fetch prints its own shape, which is the first thing to look at:
+`pc2 fetch` prints four lines as it lands — `markets`, `fills`, `accounts`, `prices` — the last
+counting quote rows the CLOB pull returned; `--no-prices` skips that step, two requests per market.
+
+A backtest prints a summary whose first lines decide whether the rest of it means anything:
+`noPriceSkips` counts entry attempts, exit attempts and open positions that found no price, and
+`entryCoverage` the share of copy attempts that did; a copy that cannot be priced is counted, never
+dropped. `priceSources` reports those four cases apart — `entryPrint`, `entryQuote`, `exitPrint`,
+`exitQuote` — so a run priced from a CLOB quote reads separately from one priced from a trade print.
+
+Here is the shipped backtest path replayed over the holdout tape, command and output as they came:
+
+```bash
+uv run pc2 backtest --config configs/militaryBacktest.yaml \
+    --data-dir data/oosExpansion --set strategy.minNetUsd=10000
+```
 
 ```
-markets 962
-fills 10666464
-accounts 469000
-prices 1841
-```
-
-A backtest prints a summary whose first two lines decide whether the rest of it means anything:
-
-```
-trades 167  marked 0
+run 42a4c2a39e1a
+trades 137  marked 0
 noPriceSkips {'entryAttempts': 0, 'exitAttempts': 0, 'markLots': 0}  entryCoverage 1.0000
-priceSources {'entryPrint': 167, 'entryQuote': 0, 'exitPrint': 0, 'exitQuote': 0}
+priceSources {'entryPrint': 137, 'entryQuote': 0, 'exitPrint': 0, 'exitQuote': 0}
+totalPnl -9831.73
+capitalDeployed 13700.00
+returnOnDeployed -0.7176
+winRate 0.0803
+maxDrawdown 10456.39
+topEvent another-us-strike-on-venezuela-by  pnl 684.90  share -0.0697
+pnlWithoutTopEvent -10516.64
+returnWithoutTopEvent -0.7790101846304966
+medianEventReturn -1.0
+events 30
 ```
 
-`entryCoverage` is the share of copy attempts that found a price at all. A copy that could not
-be priced is counted, never silently dropped.
-
-Concretely: point `pc2 fetch` at a roster of resolved military events, and it gives you a fills
-tape; run `pc2 discover` over the part of it before the split date and you get accounts flagged on
-pre-split behaviour plus the clusters they form; run `pc2 backtest` on the part after the split and
-you get what copying those clusters would have returned, at their delayed price.
+The real output ends with one further line naming the run directory it wrote. The tape that command
+read is not in this repository — see [Quickstart](#quickstart) for what fetching one takes.
 
 ## The measured result, and what it is worth
 
-The corpus this project was judged on is a fresh holdout: 200 resolved military event slugs,
-962 markets, **10,666,464 fills**, tape from 2023-10-15 to 2026-10-03. Discovery ran end to end on
-it and produced **14 suspicious accounts out of 2,466 scored, and zero clusters** — n = 0, so
-there is no cluster to copy and no statement about "how many clusters kept winning after the
-split" to make.
+Discovery ran end to end on a holdout of 200 resolved military event slugs — 962 markets and
+10,666,464 fills spanning 2023-10 to 2026-10 — and flagged **14 accounts out of 2,466 scored**
+(0.57%) while finding **0 clusters**: the holdout's `parents` and `clusterAccounts` tables both came
+back empty. The honest n for "how many clusters kept winning after the split" is therefore zero, and
+the cluster-copy strategy this repository exists to test had nothing to copy. The 11 GB behind those
+counts is not in the repository.
 
-The copy rule that the in-sample sweeps ranked first was then replayed on the same holdout:
-**−72.7% mean return over n = 167 entries across 34 events and 113 accounts** (5th-percentile
-bootstrap floor −0.874, win rate 7.8%, and 0 of 464 gradeable cells in the 480-cell grid clearing a
-positive floor). Negative in both time halves: −0.217 before the mid-split, −0.817 after.
+The burst-entry rule that the in-sample sweeps ranked first was then replayed on the same holdout
+and returned **−72.7% on n = 167 entries across 34 events and 113 accounts**, with a 5th-percentile
+bootstrap floor of −0.875, 7.8% of entries winning, and not one of the 464 gradeable cells in the
+480-cell grid clearing a positive floor. Negative in both time halves: −0.217 before the mid-split,
+−0.817 after.
 
-Both results are fails, and that is what this repository is for. What backs each number:
+Neither number is a bug report. Both are the point. What is behind each one:
 
-| Number | Value | How it was counted | Regenerable from a clone? |
+| Claim | Value | Recorded in | Regenerable from a clone? |
 |---|---:|---|---|
-| Events in the holdout roster | 200 | `grep -c '^    - ' configs/oosExpansionFetch.yaml` | **yes** |
-| Markets / resolved / unresolved | 962 / 913 / 49 | `markets.parquet`, recount of `resolvedAt` against `splitDate: 2026-01-01` | no — corpus not distributed |
-| Fills in the holdout | 10,666,464 | `fills.parquet` row count | no — corpus not distributed |
-| Candidates scored / suspicious | 2,466 / 14 | `suspicious.parquet`, `suspicious` column | no — corpus not distributed |
-| Clusters found | 0 | `parents.parquet`, `clusterAccounts.parquet` — both 0 rows | no — corpus not distributed |
-| Gradeable grid cells with a positive floor | 0 of 464 | `scripts/research/entrySweep.py` + `configs/sweeps/oosExpansionEntryGrid.yaml` | no — needs the burst-entry cache |
-| Flagship cell | n = 167, 34 events, −0.727 | same grid, `$10k / ≤0.35 / ≤5d / ≤3mkts` | no — needs the burst-entry cache |
-| Tests | 241 | `uv run pytest -q` | **yes** |
+| Holdout roster | 200 slugs | `configs/oosExpansionFetch.yaml` | yes — `grep -c '^    - ' configs/oosExpansionFetch.yaml` |
+| Markets, by split | 962 = 376 pre-split + 537 post-split + 49 unresolved | `research/oosClusters.md` | no — corpus not distributed |
+| Fills | 10,666,464 | `research/oosClusters.md` | no — corpus not distributed |
+| Candidates scored → flagged | 2,466 → 14 | `research/oosClusters.md` | no — corpus not distributed |
+| Clusters found | 0 | `research/oosClusters.md` | no — corpus not distributed |
+| Flagship cell | −0.727, n = 167, 34 events, 113 accounts, p5 −0.875 | `research/status.md` | no — needs the burst-entry cache |
+| Grid cells with p5 > 0 | 0 of 464 gradeable (480-cell grid) | `research/status.md` | no — same cache |
+| Shipped backtest path, same tape | −0.718, n = 137, 30 events | the command above | no — same tape |
+| Tests | 241 | `uv run pytest -q` | yes |
 
-**The corpus is not in this repository.** `data/`, `runs/` and `logs/` are gitignored, so the clone
-carries the roster, the configs, and the code that turns a fetch into a number — not the 11 GB of
-fills behind any count above. Every figure in that table was recounted against the on-disk
-artifacts and reconciled with the committed records in [`research/oosClusters.md`](research/oosClusters.md)
-and [`research/status.md`](research/status.md) before it was published here; reproducing them means
-re-running the fetch, not re-reading the repository.
+The last two rows are the same tape graded by two entry rules: the sweep prices entry at the burst's
+running average, the shipped backtester at fill + 30 s. 167 entries become 137, −0.727 becomes
+−0.718, and the verdict does not move.
+
+A count is only as good as its key. [`docs/paper-lane-records.md`](docs/paper-lane-records.md) §5
+records a dedupe keyed on the alert timestamp alone which saw **22 of 72 alert rows**: timestamps
+cluster, three different accounts shared one second, and the other 50 rows would have been skipped
+in silence. Every book, cache and grid here keys on `(alertTs, account, eventSlug)` for that reason.
+The same document's §9 records what a replay did to the live books — 62 of 72 signal rows
+untrustworthy — and which rows are still worth quoting.
 
 ## Quickstart
 
-Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). No key is needed for any step below.
+Python 3.12 or newer, and [uv](https://docs.astral.sh/uv/). Nothing else is needed for the offline
+checks below.
 
 ```bash
 uv sync
@@ -87,30 +106,28 @@ uv run pc2 --help
 uv run pytest -q
 ```
 
-Those three are the whole offline check: `uv sync` installs the project and its `pc2` entry point,
-`--help` lists the four commands, and the suite prints `241 passed`.
+`uv sync` installs the package and its `pc2` entry point, `--help` lists the four commands with their
+flags, and the suite prints `241 passed`.
 
-Fetching a corpus needs network access to Polymarket's Gamma and Data APIs, which the CLOB price
-fetch also uses. `--event-slug` narrows a roster config to the events you name, so a first run can
-be one event rather than two hundred:
+Fetching a corpus is the first step that needs the network: Polymarket's Gamma and Data APIs for
+markets and fills, the CLOB prices-history endpoint for quotes. No key is required for that.
 
 ```bash
-# network
+# network; --event-slug narrows a roster to the events you name, so a first run can be one event
 uv run pc2 fetch --config configs/oosExpansionFetch.yaml --event-slug us-forces-enter-iran-by
 ```
 
-`pc2 discover` additionally needs `ETHERSCAN_API_KEY` in the environment (or a `.env` at the repo
-root, which is gitignored) to read Polygon collateral transfers, and `ALCHEMY_API_KEY` for on-chain
-payout confirmation, which degrades to `None` without it. Relay lookups need no key but are paced at
-one request per second by default.
+`pc2 discover` needs `ETHERSCAN_API_KEY`, from the environment or a gitignored `.env`, and errors
+without one. `ALCHEMY_API_KEY` is optional: it only affects on-chain payout confirmation, which
+degrades to `None`. The Relay bridge lookup needs no key and is paced at one request per second.
 
 ```bash
 uv run pc2 discover --config configs/oosExpansionDiscover.yaml
 uv run pc2 backtest --config configs/militaryBacktest.yaml
 ```
 
-Every config value can be overridden per invocation, which is how a grid cell is expressed without
-editing a file:
+Every config value can be overridden per invocation with `--set`, which is how one grid cell is
+expressed without editing a file:
 
 ```bash
 uv run pc2 backtest --config configs/militaryBacktest.yaml --set strategy.delaySec=60
@@ -118,78 +135,86 @@ uv run pc2 backtest --config configs/militaryBacktest.yaml --set strategy.delayS
 
 ## How it was measured
 
-Discovery takes only data before `splitDate` and the backtest only trades after it, so the split is
+Discovery reads only data before `splitDate` and the backtest only trades after it, so the split is
 what keeps the two apart. Entry is priced from the last trade print at or before
-`fill + delaySec`, inside a six-hour staleness window; when no print is inside that window the CLOB
-price-history tape is consulted instead, and the row is tagged `quote` so the two populations are
-reported apart rather than blended. A copy that finds neither is counted in `noPriceSkips` and
-shows up in `entryCoverage`. Prices come from the tape and the CLOB, never from a midpoint, so a
-quote-priced row is a published price at a published time and not an optimistic guess at a fill.
+`fill + delaySec` inside a six-hour staleness window; when no print falls inside that window the CLOB
+price-history tape is consulted instead and the row is tagged `quote`, so the two populations are
+reported apart rather than blended. A copy that finds neither is counted in `noPriceSkips`. Prices
+come from the tape or the CLOB, never from a midpoint, so a quote-priced row is a published price at
+a published time rather than a guess at a fill.
 
-The holdout was built to be one: 200 slugs crawled from Gamma by tag, filtered by the same keyword
-roster the in-sample work used, resolved-only, volume ≥ $20k, and asserted zero slug overlap against
-every previously fetched directory.
+A run also identifies the tape it priced against. `paramsHash` covers strategy parameters only, so
+two runs of one config over two price universes would have shared a run directory and the second
+would have overwritten the first with different numbers. `runs/<hash>/summary.json` now carries a
+`quotesHash` over the quote rows, and `writeRun` refuses to overwrite a run whose `quotesHash`
+differs.
 
-Detail lives in these, all committed:
+The holdout was built to be one: 200 slugs crawled from Gamma by tag, filtered through the same
+15-keyword roster the in-sample work used, resolved-only, volume ≥ $20k, and asserted to have zero
+slug overlap with every previously fetched directory.
 
 | Document | What it records |
 |---|---|
-| [`research/oosClusters.md`](research/oosClusters.md) | the discovery run on the 200-event tape: timings, candidate funnel, the zero-cluster result, post-split account P&L |
-| [`research/status.md`](research/status.md) | the sweep and transport results in full, including the 480-cell grid table and the pre-registered PASS/FAIL gate |
-| [`docs/paper-lane-records.md`](docs/paper-lane-records.md) | the paper-lane books: event time vs write time, horizon anchoring, price coverage, signal identity, and what in the live books is untrustworthy |
+| [`research/oosClusters.md`](research/oosClusters.md) | the discovery run on the 200-event tape: timings, the candidate funnel, the zero-cluster result, post-split account P&L |
+| [`research/status.md`](research/status.md) | the sweep and transport results in full — the 480-cell grid table, the pre-registered PASS/FAIL gate, the executability check |
+| [`docs/paper-lane-records.md`](docs/paper-lane-records.md) | the paper-lane books: event time versus write time, horizon anchoring, price coverage, signal identity, and what in the live books is untrustworthy |
+| [`docs/README.md`](docs/README.md) | index of the long-form records |
 | [`SPEC.md`](SPEC.md) | the v0.2 draft the code was built against |
 | [`SPEC-DIVERGENCES.md`](SPEC-DIVERGENCES.md) | where the code moved away from that draft, and which side should change |
 
-`SPEC-DIVERGENCES.md` is a record of an audit, not a live bug list: it was written at v0.2.0-draft,
-its line numbers have since moved, and its first divergence is now closed — the `prices` table it
-called specified-but-unimplemented is implemented in [`src/polycrawler/fetch.py`](src/polycrawler/fetch.py)
-and covered by [`tests/test_prices_history.py`](tests/test_prices_history.py). Read that section
-against the code rather than trusting its count of tests.
+`SPEC-DIVERGENCES.md` is a record of an audit, not a live bug list: it was written against the draft
+at v0.2.0-draft, its line references have moved, and its first divergence is closed — the `prices`
+table it called unimplemented now lives in [`src/polycrawler/fetch.py`](src/polycrawler/fetch.py),
+covered by [`tests/test_prices_history.py`](tests/test_prices_history.py).
 
 ## What it does not do
 
 - **It does not ship its data.** No Parquet, no run directory, no log is tracked. A clone can read
-  the code, run the suite, and re-fetch a corpus; it cannot reproduce a published count without
-  doing the fetch.
-- **It does not claim an edge.** The copy rule that survived in-sample selection lost on the
-  holdout, and the cluster strategy had nothing to copy there at all: 0 clusters from 14 flagged
-  accounts. There is no configuration in this repository that has passed an out-of-sample test.
-- **It does not follow a cluster's net exposure the way `SPEC.md` describes.** The code copies
-  signed BUY bursts per `(group, market, outcome)` and never forms Yes − No; sizing mirrors their
-  shares rather than their net. See SD-12…16 in [`SPEC-DIVERGENCES.md`](SPEC-DIVERGENCES.md).
-- **It does not trade on its own.** No loop calls the executor. `scripts/execute.py` places real
-  orders only when `--live` is passed *and* `POLYMARKET_PRIVATE_KEY` is set in the same invocation,
-  and only under hard per-order and open-exposure caps. Everything else is a dry run.
+  the code, run the suite, and fetch a corpus; it cannot reproduce a published count without doing
+  the fetch first.
+- **It does not claim an edge.** The rule that won in-sample lost on the holdout, and the cluster
+  strategy had nothing to copy there at all: 0 clusters from 14 flagged accounts. No configuration
+  in this repository has passed an out-of-sample test.
+- **It does not follow a cluster's net exposure the way `SPEC.md` describes.** It copies signed BUY
+  bursts per `(group, market, outcome)` and never forms Yes − No; sizing mirrors their shares rather
+  than their net. See SD-12…16 in [`SPEC-DIVERGENCES.md`](SPEC-DIVERGENCES.md).
+- **It does not trade by itself.** No loop calls the executor. `scripts/execute.py` places an order
+  only when `--live` is passed *and* `POLYMARKET_PRIVATE_KEY` is in the same invocation, and then
+  only under hard per-order and open-exposure caps. Everything else is a dry run.
 - **It does not cover more than one venue, one chain, or two outcomes.** Markets come from
-  Polymarket, funding from Polygon collateral transfers only, and the synthetic complement `1 − p`
-  is only valid for two-outcome markets.
-- **It does not validate its own live book.** The paper-lane books under `data/live` are untracked
-  and partly reconstructed by replay; [`docs/paper-lane-records.md`](docs/paper-lane-records.md)
-  §9 states which rows are trustworthy and which are not, and §10 the rebuild that clears them.
+  Polymarket, funding from Polygon collateral transfers, and the synthetic complement `1 − p` is
+  only valid for two-outcome markets.
+- **It cannot audit its own live books from a clone.** The paper-lane books under `data/live` are
+  untracked and were partly reconstructed by replay; §9 above states which rows are trustworthy and
+  §10 the rebuild that clears the rest.
 
-Two known dead knobs are still declared in the config model: `minCoTradeMarkets` is read by nothing,
-and three result-changing constants (`burstWindow` at 10 minutes, `staleWindow` at 6 hours,
-`markHorizon` at 3,650 days) are not configurable despite the spec's "every knob is in the config
-file".
+Two dead knobs remain in the config model: `minCoTradeMarkets` is declared and read by nothing, and
+three result-changing constants — the 10-minute burst window, the 6-hour staleness window and the
+3,650-day mark horizon — are module constants rather than config fields, despite the spec's claim
+that every knob is in the config file.
 
 ## Repository layout
 
 | Path | What is in it |
 |---|---|
-| `src/polycrawler/` | the package — `fetch`, `src/polycrawler/discovery/`, `strategy`, `backtest`, `priceMove`, `sweep`, `http`, `config`, `cli` |
-| `configs/` | YAML configs: rosters, discovery and strategy settings, and the sweep grids under `configs/sweeps/` |
-| `scripts/` | the operational layer the CLI does not cover — the live watcher, paper lanes, execution, and `scripts/research/` where the studies live |
-| `tests/` | 241 tests over 27 files, plus JSON fixtures for the API shapes |
+| `src/polycrawler/` | the package — `fetch`, `discovery`, `strategy`, `backtest`, `priceMove`, `sweep`, `http`, `config`, `cli` |
+| `configs/` | YAML: fetch rosters, discovery settings, strategy settings, and the grids under `configs/sweeps/` |
+| `scripts/` | the operational layer the CLI does not cover — live watcher, paper lanes, execution — plus the studies under `scripts/research/` |
+| `tests/` | 241 tests over 27 files, with JSON fixtures for the API response shapes |
 | `research/` | one document per study, each with its numbers and its verdict |
-| `docs/` | the paper-lane record book |
+| `docs/` | long-form records, indexed by purpose in `docs/README.md` |
 | `archive/v1/` | the v0.1 spec, docs and scaffolding, kept for reference only |
+| `data/`, `runs/`, `logs/` | generated and gitignored — a fresh clone is empty here, and no count above lives in them |
+
+Root files worth knowing: `pyproject.toml` (package, deps, `pc2` entry point), `uv.lock`,
+`SPEC.md`, `SPEC-DIVERGENCES.md`, `LICENSE`.
 
 ## Licence and attribution
 
-Apache-2.0 — see [`LICENSE`](LICENSE). Research tool, paper trading only. Not financial advice, and
+Apache-2.0 — see [`LICENSE`](LICENSE). Research tooling for paper trading. Not financial advice, and
 not a recommendation to trade any market.
 
 Order signing uses [`py-clob-client`](https://github.com/Polymarket/py-clob-client) and
 `py-clob-client-v2` (Polymarket Engineering). Market, trade, price and funding data come from
-Polymarket's Gamma, Data and CLOB APIs, Etherscan's V2 proxy on chain 137, Alchemy JSON-RPC, and
-Relay's `/requests/v2` bridge lookup; nothing from those services is redistributed here.
+Polymarket's Gamma, Data and CLOB APIs, Etherscan's V2 proxy on chain 137, Alchemy JSON-RPC and
+Relay's bridge-request lookup. Nothing from those services is redistributed here.
